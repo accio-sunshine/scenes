@@ -61,7 +61,10 @@ def main(argv=None):
     for g in files:
         for f in g["files"]:
             assert os.path.exists(os.path.join(ROOT, f["path"])), f["path"]
+    pyscores_path = os.path.join(HERE, "src", "python_scores.json")   # written by python/make_python_scores.py
+    pyscores = json.load(open(pyscores_path, encoding="utf-8")) if os.path.exists(pyscores_path) else {}
     out = (tpl.replace("/*ENGINE*/", engine)
+              .replace("/*PYSCORES*/", json.dumps(pyscores.get("scenes", {})))
               .replace("/*VOICES*/", json.dumps(voices))
               .replace("/*PYFILES*/", json.dumps(files)))
     path = args.out

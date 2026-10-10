@@ -358,7 +358,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   </div>
 
   <section class="about" aria-label="About the simulation">
-    <div><h3>How the page makes the sound</h3><p>The room is a box of the size you set, with early wall reflections plus a statistical late echo. Echo (RT60) sets how long the sound lingers; Damping makes the surfaces absorb more at high frequencies. The classic scenes use the same room (6 × 5 × 3 m), 8-mic ring, voices, robot noise recipes, levels and beamformers as the Python scripts and land within about 0.5 dB of Python in the baby and fan scenes.</p></div>
+    <div><h3>How the page makes the sound</h3><p>The room is a box of the size you set, with early wall reflections plus a statistical late echo. Echo (RT60) sets how long the sound lingers; Damping makes the surfaces absorb more at high frequencies. The Python lines in the Scores table check each scene's default settings with a fuller room model (pyroomacoustics) on the same sources: most scenes agree within about 1 dB, but in Home the page's MVDR scores come out about 1.5–2.5 dB lower than Python's.</p></div>
     <div><h3>Scenario noise is synthesised</h3><p>No recorded ambience is used. The television, machines, monitors and engine are generated from simple models, so how realistic a scenario sounds is a qualitative judgement. Footsteps are approximate: the page's beamformer cancels the thump much less than Python does, so footsteps start switched off.</p></div>
     <div><h3>Loudness levels</h3><p>Every level is loudness at mic 1 compared with Speaker 1's voice, as in the scripts' <code>LEVEL_DB</code> and <code>BABY_DB</code>. The 8-mic limit applies only downstream: the PDM Frontend-in-the-Loop pipeline needs exactly 8 microphones.</p></div>
   </section>
@@ -375,6 +375,9 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 "use strict";
 const VOICES = /*VOICES*/;
 const PY_FILES = /*PYFILES*/;
+// Python cross-check scores (python/score_scene.py, pyroomacoustics) for each scene's DEFAULT settings, keyed like
+// RES.scores: { home: {scores, info}, ..., baby: {...} (Custom classic tests by preset id) }
+const PY_SCORES = /*PYSCORES*/;
 const $ = id => document.getElementById(id);
 const clone = o => JSON.parse(JSON.stringify(o));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -396,14 +399,11 @@ const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, 
 const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
 const MIC_COUNTS = [4, 6, 8, 12, 16];
 const MAX_SPK = 5;
-// Python scores from sim_conversation.py for the matching scenes (speaker 1 = man, speaker 2 = woman)
 const PRESETS = [
-  { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still.",
-    py: { mic_s1: -1.0, mic_s2: -1.0, s1_mvdr: 4.7, s2_mvdr: 5.3 } },
-  { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum.",
-    py: { mic_s1: -1.8, mic_s2: -1.8, s1_mvdr: 4.5, s2_mvdr: 4.9, s1_learned: 4.9, s2_learned: 4.7 } },
-  { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off).", py: null },
-  { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor.", py: null },
+  { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still." },
+  { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum." },
+  { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off)." },
+  { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor." },
 ];
 const SCENE_LABELS = { home: "Home", factory: "Factory", hospital: "Hospital", automobile: "Automobile", custom: "Custom" };
 const CUSTOM_DESC = "The four original test scenes (baby, baby + fan, robot moving, quiet room) in the 6 × 5 × 3 m room, with the Python comparison.";
@@ -465,7 +465,8 @@ const canon = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Ar
 function baseFor(q) { return q.scenario === "custom" ? presetP(presetId) : scenarioP(q.scenario); }
 function presetMatches(q = P) { try { return canon(q) === canon(baseFor(q)); } catch (_) { return false; } }
 const spkName = s => `Speaker ${s.id.slice(1)} (${voiceLabel(s.voice)})`;
-const pyScores = q => { const pr = q.scenario === "custom" ? PRESETS.find(x => x.id === presetId) : null; return pr && pr.py && presetMatches(q) ? pr.py : {}; };
+const pyKey = q => (q.scenario === "custom" ? presetId : q.scenario);
+const pyScores = q => { const e = PY_SCORES[pyKey(q)]; return e && presetMatches(q) ? e.scores : {}; };
 
 // ---------------------------------------------------------------- controls
 const regs = { st: [], spk: [], noi: [], rob: [] };
@@ -923,6 +924,15 @@ function wavBytes(arr, rate = 16000) {
   for (let i = 0; i < n; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, arr[i])) * 32767, true);
   return new Uint8Array(b);
 }
+function wavBytesF32(arr, rate = 16000) {     // 32-bit float: dry sources can peak well above 1
+  const n = arr.length, b = new ArrayBuffer(44 + 4 * n), v = new DataView(b);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + 4 * n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 3, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 4, true);
+  v.setUint16(32, 4, true); v.setUint16(34, 32, true); w(36, "data"); v.setUint32(40, 4 * n, true);
+  for (let i = 0; i < n; i++) v.setFloat32(44 + 4 * i, arr[i], true);
+  return new Uint8Array(b);
+}
 // ---- downloads: the Claude viewer saves .zip (not .wav), so audio goes inside a zip there
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
 function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
@@ -1230,9 +1240,9 @@ function buildScores() {
   }
   if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
   $("scoreNote").textContent = hasPy
-    ? "Python lines: the same scene from sim_conversation.py (pyroomacoustics). The page's numbers should land within about 0.5 dB."
-    : RP.scenario !== "custom" ? "No Python comparison for this scene: Python only simulated the classic tests (Custom)."
-    : "Python numbers exist only for the “Baby crying” and “Baby + fan” classic tests with their default settings.";
+    ? "Python lines: an independent check of this exact scene. python/score_scene.py rebuilds it from the page's own sources and positions with pyroomacoustics (a fuller room model) and the original Python beamformer code. Close numbers mean the page's quick room model can be trusted here."
+    : PY_SCORES[pyKey(RP)] ? "No Python line: you changed the scene from its defaults, and Python was run on the defaults only. Download the zip and run python/score_scene.py on it to check your version."
+    : "No Python check for this scene yet. Download the zip and run python/score_scene.py on it.";
   $("dlAll").disabled = false;
 }
 function scoresCsv() {
@@ -1249,6 +1259,10 @@ $("dlAll").addEventListener("click", () => {
   for (const k in RES.solos) files.push({ name: `alone/${k}.wav`, data: wavBytes(RES.solos[k]) });
   files.push({ name: "scores.csv", data: enc.encode(scoresCsv()) });
   files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2, micPositions: RES.micPositions }, null, 2) + "\n") });
+  // for the Python cross-check (python/score_scene.py): resolved geometry, each source before the room, the page's scores
+  files.push({ name: "scene.json", data: enc.encode(JSON.stringify({ name: RP.scenario === "custom" ? "custom_" + presetId : RP.scenario, ...RES.geometry }, null, 1) + "\n") });
+  files.push({ name: "page_scores.json", data: enc.encode(JSON.stringify(RES.scores, null, 1) + "\n") });
+  for (const k in RES.dry) files.push({ name: `dry/${k}.wav`, data: wavBytesF32(RES.dry[k]) });
   offerFiles(`scene_simulator_${RP.scenario === "custom" ? "custom_" + (presetMatches(RP) ? presetId : "edited") : RP.scenario}.zip`, files);
 });
 function selectTrack(key) {

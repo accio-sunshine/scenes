@@ -52,6 +52,16 @@ scenes/
 - **SRP elevation**: a planar ring reports `el: null` (it can't resolve elevation). Dual ring estimates it in 15° steps;
   coarse, and a gap well above ~5 cm aliases at 3.5 kHz (one miss seen at 20 cm).
 
+### Python cross-check (2026-10-10)
+- `python/score_scene.py` rebuilds a scene from the page's dry sources + placements (zip or `web/tools/export_scene.js`
+  folder) with pyroomacoustics and the original Python STFT/MPDR code. Reproduces sim_conversation.py's Baby crying /
+  Baby + fan scores within 0.1 dB. `python/make_python_scores.py` -> `web/src/python_scores.json` -> page "Python" lines.
+- Agreement (MVDR, default scenes): classic tests and Factory within ~0.6 dB, Hospital ~0.9, Automobile ~1.2,
+  **Home: page 1.3-2.7 dB below Python** (systematic; not damping, not the ambient sources; small-room tail model).
+- Page MVDR scores also depend on the random draw of the statistical tail: changing only the RIR seed moved Home
+  (no ambient noise) MVDR by up to 2.5 dB. Not shown on the page yet.
+- Fixed: engine clamped room W/H to >= 2 m, so the 1.6 x 1.2 m car cabin was simulated as 2.7 x 2 x 2 m.
+
 ### Resolved 2026-10-10
 - **Engine v1 regression now confirmed passing.** The test used `git show HEAD:web/src/engine.js` as "v1", but HEAD
   was already v2 (it compared v2 to itself). The real v1 engine (accio-sunshine/robot_acoustics @ e655ff9) is vendored at

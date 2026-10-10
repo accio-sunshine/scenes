@@ -18,8 +18,25 @@ web/
   src/robot_acoustic.template.html  UI
   tests/                          engine regression, scenario tests, headless UI check
 voices/                           male.wav, female.wav, baby.wav (embedded into the page)
+  tools/export_scene.js           writes a scene's dry sources + geometry for the Python check
+python/
+  score_scene.py                  independent Python check of a scene (pyroomacoustics room + original MPDR code)
+  make_python_scores.py           runs it on every scene's defaults -> web/src/python_scores.json (the page's "Python" lines)
 sim_conversation_out/, sim_noise_out/   reference WAVs from the Python simulator, played in the
                                   page's "compare with Python" section (build.py checks they exist)
+```
+
+## Python cross-check
+
+The page uses a light room model so it can run in a browser. `python/score_scene.py` rebuilds a scene from the page's
+own dry sources and placements with pyroomacoustics (image sources up to the Sabine order) and scores it with the
+original Python STFT and MPDR code. Close page and Python scores mean the page's quick answers hold for that scene.
+It reproduces the original `sim_conversation.py` scores for the Baby crying and Baby + fan tests to within 0.1 dB.
+
+```
+pip install numpy scipy soundfile pyroomacoustics
+python python/score_scene.py scene_simulator_factory.zip     # any zip from "Download all audio + scores"
+python python/make_python_scores.py && (cd web && python build.py)   # refresh the page's Python lines
 ```
 
 ## Build and test
@@ -34,5 +51,6 @@ python tests/ui_headless.py robot_acoustic.html   # needs: pip install playwrigh
 
 ## Download zip
 
-`mics/mic1..micN.wav`, `beams/*.wav`, `alone/*.wav`, `scores.csv` (long format) and `settings.json`
-(schema 2, including `micPositions` in metres from the array centre).
+`mics/mic1..micN.wav`, `beams/*.wav`, `alone/*.wav`, `scores.csv` (long format), `settings.json`
+(schema 2, including `micPositions` in metres from the array centre), and for the Python check `scene.json`
+(resolved geometry and levels), `dry/*.wav` (each source before the room, 32-bit float) and `page_scores.json`.

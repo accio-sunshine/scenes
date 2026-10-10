@@ -144,7 +144,7 @@ function normalizeParams(p0) {
   };
   p.schema = 2;
   p.scenario = ["home", "factory", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
-  num("roomL", 6, 2, 30); num("roomW", 5, 2, 30); num("roomH", 3, 2, 8);
+  num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
   for (const k of ROBOT_KEYS) { p[k + "On"] = !!p[k + "On"]; num(k + "Db", ENG_ROBOT_DB_DEF[k + "Db"]); }
@@ -572,6 +572,9 @@ function render(p0, voices, progress = () => {}) {
   const rirFor = pos => engRoomRirs(pos, mics, cen, room, p.rt60, p.damping, Lr, rirRng);
   const place = (sig, start) => { const out = new Float64Array(N), s = Math.round(start * FS); for (let i = 0; i < sig.length && s + i < N; i++) out[s + i] = sig[i]; return out; };
   const sources = [], talk = {}, solo = {}, tgt = [];   // tgt: {sid, y} target speakers with all channels
+  // dry: every source's signal before the room (for the Python cross-check); geo: where each one was placed
+  const dry = {}, geo = { fs: FS, n: N, room, centre: cen, mics, rt60: p.rt60, damping: p.damping, rt60Hf: engRt60Hf(p.rt60, p.damping),
+    roomDb: p.roomDb, learnedTakeWeight: 9, pathSegments: "raised-cosine partition of unity, 4 positions at 0, N/3, 2N/3, N", sources: [] };
   const bg = engZeros(M);
   const note = (label, pl) => { if (pl.clamped) warnings.push(label + " was outside the room and moved to stay 0.2 m inside it (now az " + pl.az.toFixed(0) + ", el " + pl.el.toFixed(0) + ", " + pl.dist.toFixed(2) + " m)."); };
 
@@ -590,6 +593,7 @@ function render(p0, voices, progress = () => {}) {
     if (i === 0) ref = energy(y[0]) || 1e-30;
     else { const e = energy(y[0]); if (e > 0) scaleAll(y, Math.sqrt(ref / e * 10 ** (s.db / 10))); }
     sources.push({ id: s.id, kind: "speaker", label, voice: s.voice, az: pl.az, el: pl.el, dist: pl.dist, clamped: pl.clamped, target: s.target });
+    dry[s.id] = sig; geo.sources.push({ id: s.id, kind: "speaker", target: s.target, db: i === 0 ? 0 : s.db, az: pl.az, el: pl.el, positions: [pl.pos] });
     solo[s.id] = y[0];
     if (s.target) tgt.push({ sid: s.id, az: pl.az, el: pl.el, y }); else addInto(bg, y);
   });
@@ -608,14 +612,18 @@ function render(p0, voices, progress = () => {}) {
     if (!(esig > 0) || !Number.isFinite(esig)) { warnings.push("Noise '" + n.label + "': generator returned silence or non-finite values, skipped."); return; }
     const p1 = engPlace(cen, room, n.az, n.el, n.dist, 0.2); note("Noise '" + n.label + "'", p1);
     let y;
+    const gsrc = { id: n.id, kind: "noise", target: false, db: n.db, positions: [p1.pos] };
+    dry[n.id] = sig; geo.sources.push(gsrc);
     if (!n.path) y = engConvolve(sig, rirFor(p1.pos), NF);
     else {
       const e1 = n.path, shortArc = ((e1.az1 - n.az + 540) % 360) - 180;
       segW = segW || engSegWeights();
       y = engZeros(M);
       let endPl = null;
+      gsrc.positions = [];
       for (let j = 0; j < 4; j++) {
         const f = j / 3, pl = engPlace(cen, room, n.az + shortArc * f, n.el + (e1.el1 - n.el) * f, n.dist + (e1.dist1 - n.dist) * f, 0.2);
+        gsrc.positions.push(pl.pos);
         if (j === 3) { endPl = pl; note("Noise '" + n.label + "' (end of path)", pl); }
         const seg = new Float64Array(N); for (let k = 0; k < N; k++) seg[k] = sig[k] * segW[j][k];
         addInto(y, engConvolve(seg, rirFor(pl.pos), NF));
@@ -632,13 +640,13 @@ function render(p0, voices, progress = () => {}) {
 
   // ---- the robot's own noises (fixed positions on the body, follow the array)
   const robotRir = {};
-  const robotTake = (seed, keepSolo) => {
+  const robotTake = (seed, keepSolo, dryKey) => {
     const sigs = robotSignals(p, seed), total = engZeros(M);
     for (const k of ROBOT_KEYS) {
       if (!p[k + "On"]) continue;
       let y;
-      if (k === "hum") { const h = sigs.hum(); y = Array.from({ length: M }, () => h.slice()); }
-      else { robotRir[k] = robotRir[k] || rirFor(engRobotPlace(cen, room, k).pos); y = engConvolve(sigs[k](), robotRir[k], NF); }
+      if (k === "hum") { const h = sigs.hum(); dry[dryKey(k)] = h; y = Array.from({ length: M }, () => h.slice()); }
+      else { robotRir[k] = robotRir[k] || rirFor(engRobotPlace(cen, room, k).pos); const d = sigs[k](); dry[dryKey(k)] = d; y = engConvolve(d, robotRir[k], NF); }
       const e = energy(y[0]);
       if (e > 0) scaleAll(y, Math.sqrt(ref / e * 10 ** (p[k + "Db"] / 10)));
       addInto(total, y);
@@ -647,7 +655,9 @@ function render(p0, voices, progress = () => {}) {
     return { total, ms: sigs.ms };
   };
   progress("Running the robot's motors");
-  const robot = robotTake(1, true);
+  const robot = robotTake(1, true, k => "robot_" + k);
+  for (const k of ROBOT_KEYS) if (p[k + "On"]) geo.sources.push({ id: "robot_" + k, kind: "robot", target: false, db: p[k + "Db"], sameOnAllMics: k === "hum",
+    positions: k === "hum" ? [] : [engRobotPlace(cen, room, k).pos], learnedTake: "robot_" + k + "_take2" });
   addInto(bg, robot.total);
   for (const k of ROBOT_KEYS) if (p[k + "On"]) {
     if (k === "hum") sources.push({ id: "hum", kind: "robot", label: ENG_ROBOT_LABEL.hum, az: 0, el: 0, dist: 0, clamped: false });
@@ -670,7 +680,7 @@ function render(p0, voices, progress = () => {}) {
   accumulateCov(mix, Rr, Ri, 1 / NFR);
   let LRr = Rr, LRi = Ri;
   if (anyRobot) {
-    const take = robotTake(99, false).total;
+    const take = robotTake(99, false, k => "robot_" + k + "_take2").total;
     for (let m = 0; m < M; m++) for (let i = 0; i < N; i++) take[m][i] += roomNoise[m][N - 1 - i];
     const Tr = new Float64Array(MM), Ti = new Float64Array(MM);
     accumulateCov(take, Tr, Ti, 1);
@@ -726,6 +736,7 @@ function render(p0, voices, progress = () => {}) {
     motor: { fan: ds(ms.fan), neck: ds(ms.neck), sh: ds(ms.sh), walk: ds(ms.walk) },
     room: { L: room[0], W: room[1], H: room[2], rt60: p.rt60, rt60Hf: engRt60Hf(p.rt60, p.damping), volume: V, damping: p.damping },
     micPositions: rel.map(r => r.map(v => Math.round(v * 1e5) / 1e5)),   // metres from the array centre, mic 1 first (x = az 0, z up)
+    dry: Object.fromEntries(Object.entries(dry).map(([k, v]) => [k, Float32Array.from(v)])), geometry: geo,
     ms: Date.now() - t0,
   };
 }
@@ -769,7 +780,7 @@ if (typeof self !== "undefined" && typeof window === "undefined" && typeof modul
     if (voiceBufs) voices = { male: readWav(voiceBufs.male, true).x, female: readWav(voiceBufs.female, true).x, baby: readWav(voiceBufs.baby, false).x };
     try {
       const res = render(params, voices, msg => self.postMessage({ id, progress: msg }));
-      const transfer = [...res.mics.map(a => a.buffer), ...Object.values(res.tracks).map(a => a.buffer), ...Object.values(res.solos).map(a => a.buffer)];
+      const transfer = [...res.mics.map(a => a.buffer), ...Object.values(res.tracks).map(a => a.buffer), ...Object.values(res.solos).map(a => a.buffer), ...Object.values(res.dry).map(a => a.buffer)];
       self.postMessage({ id, res }, transfer);
     } catch (err) { self.postMessage({ id, error: String(err && err.stack || err) }); }
   };

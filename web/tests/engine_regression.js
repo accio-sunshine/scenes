@@ -52,6 +52,10 @@ if (!only) {
   const near = (q, az, el) => Math.min(Math.abs(q.az - az), 360 - Math.abs(q.az - az)) <= 15 && Math.abs(q.el - el) <= 15;
   ok(fin(dr) && dr.srp.peaks.some(q => near(q, 40, 30)) && dr.srp.peaks.some(q => near(q, 150, -20)), "dual ring elevation (truth 40/30, 150/-20): peaks " + JSON.stringify(dr.srp.peaks));
 }
+{ // small rooms are not enlarged: the Automobile cabin is 2.7 x 1.6 x 1.2 m (the engine used to clamp W and H to >= 2 m)
+  const n = v2.normalizeParams({ roomL: 2.7, roomW: 1.6, roomH: 1.2, arrayX: 2.0, arrayY: 0.8, arrayH: 0.8 });
+  ok(n.roomL === 2.7 && n.roomW === 1.6 && n.roomH === 1.2 && n._warnings.length === 0, `car cabin kept at ${n.roomL} x ${n.roomW} x ${n.roomH} m`);
+}
 { // dual-ring layout: mics 1..M/2 lower ring at i*360/(M/2), mics M/2+1..M upper ring offset half a step; same as the page's micAngles()
   const tpl = fs.readFileSync(path.join(__dirname, "..", "src", "robot_acoustic.template.html"), "utf8");
   const micAngles = new Function("return " + tpl.match(/function micAngles\(n, shape\) \{[\s\S]*?\n\}/)[0])();
