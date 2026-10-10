@@ -1224,7 +1224,7 @@ $("dlAll").addEventListener("click", () => {
   for (const k in RES.tracks) if (k !== "mic1") files.push({ name: `beams/${k}.wav`, data: wavBytes(RES.tracks[k]) });
   for (const k in RES.solos) files.push({ name: `alone/${k}.wav`, data: wavBytes(RES.solos[k]) });
   files.push({ name: "scores.csv", data: enc.encode(scoresCsv()) });
-  files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2 }, null, 2) + "\n") });
+  files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2, micPositions: RES.micPositions }, null, 2) + "\n") });
   offerFiles(`scene_simulator_${RP.scenario === "custom" ? "custom_" + (presetMatches(RP) ? presetId : "edited") : RP.scenario}.zip`, files);
 });
 function selectTrack(key) {

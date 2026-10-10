@@ -296,22 +296,24 @@ function engRoomRirs(src, mics, cen, room, rt60, damping, Lr, rng) {
   const mkEnv = rt => { const e = new Float64Array(tailLen); let s = 0; for (let t = 0; t < tailLen; t++) { e[t] = Math.exp(-6.9078 * t / (rt * FS)) * Math.min(1, t / (0.01 * FS)); s += e[t] ** 2; } return [e, s]; };
   const [env, envE] = mkEnv(rt60), [envH, envEH] = damp ? mkEnv(rt60Hf) : [null, 0];
   const sigma = Math.sqrt(lateOf(alpha) / (P * envE)), sigmaH = damp ? Math.sqrt(lateOf(alphaH) / (P * envEH)) : 0;
-  const lpA = Math.exp(-2 * Math.PI * 2000 / FS);   // two-pole split near 2 kHz: low band keeps rt60, high band gets rt60Hf
+  // low/high split for damping: raised-cosine crossover 1.5-2.5 kHz applied in the frequency domain (W_L + W_H = 1).
+  // Low band keeps rt60, high band gets rt60Hf. (A time-domain 2-pole split leaked the slow low-band tail ~9 dB down
+  // into the high band, which hid the faster HF decay.)
+  const WL = damp ? new Float64Array(half + 1) : null;
+  if (damp) for (let k = 0; k <= half; k++) { const f = k * FS / L2; WL[k] = f <= 1500 ? 1 : f >= 2500 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * (f - 1500) / 1000); }
   const Tr = mics.map(() => new Float64Array(L2)), Ti = mics.map(() => new Float64Array(L2));
-  const nr = new Float64Array(L2), ni = new Float64Array(L2);
+  const nr = new Float64Array(L2), ni = new Float64Array(L2), hr = damp ? new Float64Array(L2) : null, hi = damp ? new Float64Array(L2) : null;
   for (let p = 0; p < P; p++) {
     const z = 2 * rng.u() - 1, phi = 2 * Math.PI * rng.u(), s = Math.sqrt(1 - z * z);
     const u = [s * Math.cos(phi), s * Math.sin(phi), z];
     nr.fill(0); ni.fill(0);
-    if (!damp) for (let t = 0; t < tailLen; t++) nr[t] = sigma * env[t] * rng.g();
+    if (!damp) { for (let t = 0; t < tailLen; t++) nr[t] = sigma * env[t] * rng.g(); fft(nr, ni, false); }
     else {
-      let l1 = 0, lp = 0;   // two cascaded one-poles (12 dB/oct) so the low band leaks little into the high band
-      for (let t = 0; t < tailLen; t++) {
-        const g = rng.g(); l1 = lpA * l1 + (1 - lpA) * g; lp = lpA * lp + (1 - lpA) * l1;
-        nr[t] = sigma * env[t] * lp + sigmaH * envH[t] * (g - lp);
-      }
+      hr.fill(0); hi.fill(0);
+      for (let t = 0; t < tailLen; t++) { const g = rng.g(); nr[t] = sigma * env[t] * g; hr[t] = sigmaH * envH[t] * g; }
+      fft(nr, ni, false); fft(hr, hi, false);
+      for (let k = 0; k < L2; k++) { const w = WL[Math.min(k, L2 - k)]; nr[k] = w * nr[k] + (1 - w) * hr[k]; ni[k] = w * ni[k] + (1 - w) * hi[k]; }
     }
-    fft(nr, ni, false);
     mics.forEach((m, mi) => {
       const tau = ((m[0] - cen[0]) * u[0] + (m[1] - cen[1]) * u[1] + (m[2] - cen[2]) * u[2]) / C * FS - 8;   // arrives earlier toward u
       const dl = 2 * Math.PI * tau / L2, cd = Math.cos(dl), sd = Math.sin(dl), TR = Tr[mi], TI = Ti[mi];
@@ -473,14 +475,14 @@ function accumulateCov(chs, Rr, Ri, weight) {
   }
 }
 
-// SRP-PHAT over azimuth x elevation on the mixture covariance. grid[az] = max over elevation, elBest[az] = the argmax.
-// For a PLANAR ring the delays depend only on cos(el), so el and -el are indistinguishable (elevation is ambiguous in
-// sign and weakly resolved in size); for a planar array we search el = 0..90 only and report el >= 0. A source straight
-// above (el 90) gives zero delays at every azimuth, so its azimuth is undefined and the az grid is flat there.
-// A dual ring has a vertical baseline (ringGap), so the sign of el is resolved, but only coarsely for a few cm of gap.
+// SRP-PHAT on the mixture covariance. grid[az] = the azimuth map peaks are picked on (see below).
+// For a PLANAR ring the delays depend only on cos(el): el and -el are indistinguishable and the size of el is only seen
+// as a shrink of all delays, which reverberation mimics (in tests in-plane talkers came out 45-90 deg "up"). So a planar
+// ring reports el = null (unknown). A source straight above gives zero delays at every azimuth: its azimuth is undefined.
+// A dual ring has a vertical baseline (ringGap), so el is estimated per peak (-60..90 in 15 deg steps), coarsely.
 function engSrp(Rr, Ri, rel, nsrc) {
   const M = rel.length, planar = rel.every(r => Math.abs(r[2] - rel[0][2]) < 1e-9);
-  const els = planar ? [0, 15, 30, 45, 60, 75, 90] : [-60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
+  const els = planar ? [0] : [-60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
   const kLo = Math.ceil(300 * NFFT / FS), kHi = Math.floor(3500 * NFFT / FS), nk = kHi - kLo + 1;
   const pi = [], pj = [];
   for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) { pi.push(i); pj.push(j); }
@@ -489,8 +491,11 @@ function engSrp(Rr, Ri, rel, nsrc) {
     const idx = k * M * M + pi[q] * M + pj[q], rr = Rr[idx], ri = Ri[idx], mag = Math.hypot(rr, ri) || 1;
     ar[q * nk + k - kLo] = rr / mag; ai[q * nk + k - kLo] = ri / mag;
   }
-  const dw = 2 * Math.PI * (FS / NFFT) / C, grid = new Float64Array(360).fill(-Infinity), elBest = new Float64Array(360);
-  for (const el of els) {
+  // Azimuth peaks come from the el = 0 slice (the v1 map). Taking the max over elevation first let diffuse/reverberant energy,
+  // which a small planar ring cannot place in elevation, pile up at high elevations and turned the flat zenith row into
+  // spurious plateau-edge peaks. Elevation is then estimated per peak, at that azimuth.
+  const dw = 2 * Math.PI * (FS / NFFT) / C, E = els.length, map = els.map(() => new Float64Array(360));
+  els.forEach((el, ei) => {
     const ce = Math.cos(el * Math.PI / 180), se = Math.sin(el * Math.PI / 180);
     for (let az = 0; az < 360; az++) {
       const u0 = ce * Math.cos(az * Math.PI / 180), u1 = ce * Math.sin(az * Math.PI / 180), u2 = se;
@@ -506,9 +511,12 @@ function engSrp(Rr, Ri, rel, nsrc) {
           const c2 = c * cd - s * sd; s = s * cd + c * sd; c = c2;
         }
       }
-      if (sum > grid[az]) { grid[az] = sum; elBest[az] = el; }
+      map[ei][az] = sum;
     }
-  }
+  });
+  // planar: the el = 0 slice. Dual ring: max over elevation (it has real elevation information, and a source well above
+  // the plane is mis-aimed in azimuth on the el = 0 slice).
+  const grid = planar ? map[0] : Float64Array.from(map[0], (_, az) => Math.max(...map.map(m => m[az])));
   let lo = Infinity, hi = -Infinity; for (const v of grid) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
   const pk = [];
   for (let g = 0; g < 360; g++) if (grid[g] >= grid[(g + 359) % 360] && grid[g] > grid[(g + 1) % 360]) pk.push(g);
@@ -521,7 +529,11 @@ function engSrp(Rr, Ri, rel, nsrc) {
       if (chosen.every(c => Math.min(Math.abs(c - g), 360 - Math.abs(c - g)) >= 15)) chosen.push(g);
     }
   }
-  return { grid: Array.from(grid, v => (v - lo) / (hi - lo || 1)), peaks: chosen.sort((a, b) => a - b).map(az => ({ az, el: elBest[az] })) };
+  const elAt = az => { if (planar) return null; let best = 0; for (let ei = 1; ei < E; ei++) if (map[ei][az] > map[best][az]) best = ei; return els[best]; };
+  let peaks = chosen.map(az => ({ az, el: elAt(az) }));
+  const zen = peaks.filter(q => q.el === 90);   // every azimuth is the same point at the zenith: keep one (the strongest)
+  if (zen.length > 1) { const keep = zen.reduce((a, b) => (map[E - 1][b.az] > map[E - 1][a.az] ? b : a)); peaks = peaks.filter(q => q.el !== 90 || q === keep); }
+  return { grid: Array.from(grid, v => (v - lo) / (hi - lo || 1)), peaks: peaks.sort((a, b) => a.az - b.az) };
 }
 
 // ---------------------------------------------------------------- the scene
@@ -713,6 +725,7 @@ function render(p0, voices, progress = () => {}) {
     mics: mix.map(c => f32(c)), tracks, solos, scores, srp, sources, talk, warnings,
     motor: { fan: ds(ms.fan), neck: ds(ms.neck), sh: ds(ms.sh), walk: ds(ms.walk) },
     room: { L: room[0], W: room[1], H: room[2], rt60: p.rt60, rt60Hf: engRt60Hf(p.rt60, p.damping), volume: V, damping: p.damping },
+    micPositions: rel.map(r => r.map(v => Math.round(v * 1e5) / 1e5)),   // metres from the array centre, mic 1 first (x = az 0, z up)
     ms: Date.now() - t0,
   };
 }
