@@ -343,6 +343,9 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
       <h2 id="h-pick">Pick out each speaker</h2>
       <p class="hint">Higher dB means a cleaner target voice. The Scores table above explains the numbers.</p>
       <ol class="tracks" id="beamList"></ol>
+      <h3 style="margin-top: 8px">Each microphone, raw</h3>
+      <p class="hint">What each microphone hears before any processing: the same scene, with tiny differences in timing and level between mics. Those differences are what the beamformers use. Headphones help.</p>
+      <ol class="tracks grid2" id="micList"></ol>
       <h3 style="margin-top: 8px">Each sound alone, at mic 1</h3>
       <p class="hint">Normalised so you can hear its character.</p>
       <ol class="tracks grid2" id="soloList"></ol>
@@ -2416,6 +2419,12 @@ function buildLists() {
       trackRow(bl, { key: id, file: `${id}.wav`, label, viewName: `${label}, aimed at ${nm}`, desc, score: S[id], py: py[id], badge: i + 1, color: c, get: page(RES.tracks[id]), src: "page" });
     }
   });
+  const ml = $("micList"); ml.textContent = "";
+  const ang = micAngles(RES.mics.length, q.arrayShape), dual = q.arrayShape === "dual_ring";
+  RES.mics.forEach((m, i) => {
+    const where = `${Math.round(ang[i])}°` + (dual ? (i >= RES.mics.length / 2 ? ", upper ring" : ", lower ring") : "");
+    trackRow(ml, { key: "rawmic_" + i, file: `mic${i + 1}.wav`, label: `Mic ${i + 1}`, viewName: `Mic ${i + 1} (${where}), raw`, desc: where, badge: i + 1, color: "var(--mic)", get: page(m), src: "page" });
+  });
   const sl = $("soloList"); sl.textContent = "";
   const solos = q.speakers.map((s, i) => [s.id, spkName(s), `var(--s${i + 1})`, i + 1])
     .concat(q.noises.map((n, i) => [n.id, n.label, "var(--noise)", "N" + (i + 1)]))
@@ -2469,6 +2478,7 @@ $("dlAll").addEventListener("click", () => {
 });
 function selectTrack(key) {
   const map = { ...RES.tracks }; for (const k in RES.solos) map["solo_" + k] = RES.solos[k];
+  RES.mics.forEach((m, i) => { map["rawmic_" + i] = m; });
   if (key === "mics") { showArray("mics", "Selected microphones", micDesc(), micSum(), "page"); return; }
   const li = document.querySelector(`ol.tracks li[data-key="${key}"]`);
   const k = map[key] ? key : "mic1";
