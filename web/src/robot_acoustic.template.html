@@ -339,7 +339,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
     </section>
     <section aria-labelledby="h-py">
       <h2 id="h-py">Python recordings</h2>
-      <p class="hint">The WAV files made by <code>sim_conversation.py</code> and <code>sim_8mic_robot_noise.py</code> with pyroomacoustics for the classic test scenes (Custom). Open one to compare it with the page's version.</p>
+      <p class="hint" id="pyNote"></p>
       <div id="pyList"></div>
     </section>
   </div>
@@ -661,6 +661,7 @@ function syncKnobs() {
   if (add) { add.setAttribute("aria-disabled", P.speakers.length >= MAX_SPK); add.textContent = P.speakers.length >= MAX_SPK ? `Add speaker (maximum ${MAX_SPK})` : "Add speaker"; }
   const rmb = P.speakers.length <= 1; P.speakers.forEach(s => { const b = $("rm_" + s.id); if (b) b.disabled = rmb; });
   $("allOn").textContent = `All ${P.micCount} mics`;
+  if ($("pyList").children.length) syncPyList();
 }
 
 // ---------------------------------------------------------------- top view
@@ -1208,7 +1209,8 @@ function buildScores() {
   if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
   $("scoreNote").textContent = hasPy
     ? "Python lines: the same scene from sim_conversation.py (pyroomacoustics). The page's numbers should land within about 0.5 dB."
-    : "Python numbers exist only for the “Baby crying” and “Baby + fan” classic tests with their default settings (Custom scene).";
+    : RP.scenario !== "custom" ? "No Python comparison for this scene: Python only simulated the classic tests (Custom)."
+    : "Python numbers exist only for the “Baby crying” and “Baby + fan” classic tests with their default settings.";
   $("dlAll").disabled = false;
 }
 function scoresCsv() {
@@ -1250,12 +1252,31 @@ function fetchRaw(path) {
   const tryUrl = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
   return tryUrl("audio/" + path).catch(() => tryUrl("../" + path)).then(b => new Uint8Array(b)).catch(() => null);
 }
+// Which classic test (Custom) each Python group belongs to. Groups not listed are reference material for the Custom
+// scene as a whole (clean voices, robot noises one at a time, and sim_8mic_robot_noise.py, which uses other talkers).
+const PY_SCENE = { "Conversation: baby crying": "baby", "Conversation: baby + fan": "fan", "Conversation: baby + robot moving (with footsteps)": "robot" };
+const PY_EXTRA = { "Robot noise scenes (sim_8mic_robot_noise.py)": "Different talkers (two CMU Arctic speech clips), not this page's voices." };
+let pyShown = null;
+function syncPyList() {
+  const custom = sceneId === "custom", key = custom ? "custom:" + presetId : sceneId, match = presetMatches();
+  $("pyList").hidden = !custom;
+  const name = custom ? "" : ((haveScenes() && SCENARIOS[sceneId] && SCENARIOS[sceneId].label) || SCENE_LABELS[sceneId] || sceneId);
+  const pr = PRESETS.find(x => x.id === presetId), has = Object.values(PY_SCENE).includes(presetId);
+  $("pyNote").textContent = !custom
+    ? `There are no Python recordings for the ${name} scene. Python (sim_conversation.py, sim_8mic_robot_noise.py) only simulated the classic tests: pick Custom (classic tests) to compare.`
+    : (has ? `Made with pyroomacoustics for the classic tests. The group for “${pr.label}” is opened${match ? "" : " (your settings differ from it now)"}.`
+      : `Made with pyroomacoustics for the classic tests. Python has no recording of “${pr.label}”.`)
+      + (presetId === "robot" ? " Python's robot scene has footsteps on; the page's Robot moving has them off." : "");
+  if (pyShown === key) return;           // only re-open groups when the scene changes, not on every knob move
+  pyShown = key;
+  for (const box of $("pyList").children) box.open = custom && PY_SCENE[box.dataset.title] === presetId;
+}
 function buildPyList() {
   const root = $("pyList");
   for (const grp of PY_FILES) {
-    const box = document.createElement("details"); box.className = "lgroup";
-    if (root.children.length < 2) box.open = true;
+    const box = document.createElement("details"); box.className = "lgroup"; box.dataset.title = grp.title;
     const h = document.createElement("summary"); h.innerHTML = `<h3></h3><small>${grp.files.length} files</small>`; h.querySelector("h3").textContent = grp.title; box.appendChild(h);
+    if (PY_EXTRA[grp.title]) { const n = document.createElement("p"); n.className = "hint"; n.textContent = PY_EXTRA[grp.title]; box.appendChild(n); }
     const ol = document.createElement("ol"); ol.className = "tracks"; box.appendChild(ol);
     const err = document.createElement("p"); err.className = "err"; err.hidden = true;
     err.textContent = "Couldn't load this file. The list works on the published page, or when the repo folder is served by a local web server (python -m http.server).";
@@ -1301,7 +1322,7 @@ buildStatic(); buildRobot(); buildCards();
   const first = sceneOrder().find(id => SCENARIOS[id]);
   if (first) loadScene(first); else loadScene("custom", "robot");
 })();
-drawHead(); drawLegend(); buildPyList();
+drawHead(); drawLegend(); buildPyList(); syncPyList();
 let resizeT = null;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
