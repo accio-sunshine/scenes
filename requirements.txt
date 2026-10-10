@@ -1,9 +1,0 @@
-numpy
-scipy
-soundfile
-matplotlib
-pyroomacoustics
-nara_wpe
-pyttsx3
-faster-whisper
-jiwer

@@ -4,38 +4,21 @@ This is the 8-mic humanoid robot acoustic front-end project. The Scene Simulator
 
 ## Project Structure
 
+This repo holds only the Scene Simulator. The rest of the robot-audio project (Python simulator, experiments,
+HARK, `hil/` PDM pipeline) lives elsewhere; it was removed from this repo on 2026-10-10 (still in git history).
+
 ```
-robot-audio/
-├── web/                          # Scene Simulator (this repo's main deliverable)
+scenes/
+├── web/
 │   ├── robot_acoustic.html       # Built page (do NOT edit; built by python build.py)
 │   ├── build.py                  # Concatenates engine.js + scenarios.js into template
-│   └── src/
-│       ├── engine.js             # Audio engine (rooms, sources, mics, beamforming)
-│       ├── scenarios.js          # Home, Factory, Hospital, Automobile + noise generators
-│       └── robot_acoustic.template.html  # UI template
-├── hil/                          # Downstream: PDM Frontend-in-the-Loop
-│   ├── make_pdm.py               # Reads Scene Simulator zip -> pdm_stream.bin + player.asm
-│   └── tests/test_hil.py         # 31 tests (schema-1/2 zips, 8-mic guard)
-├── experiments/                  # Pipeline experiments (exp22 = Frontend-in-the-Loop)
+│   ├── src/
+│   │   ├── engine.js             # Audio engine (rooms, sources, mics, beamforming)
+│   │   ├── scenarios.js          # Home, Factory, Hospital, Automobile + noise generators
+│   │   └── robot_acoustic.template.html  # UI template
+│   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py
 ├── voices/                       # male.wav, female.wav, baby.wav (base64'd into page)
-└── sim_*.py                      # Legacy Python simulator (phases 0-7)
-```
-
-## Build & Test
-
-```bash
-cd web
-
-# Build to a scratch file (doesn't overwrite published page)
-python build.py --out "$TEMP/scene_sim_dev.html" --no-published-map
-
-# Headless load check (Playwright). In a cloud container, launch with executable_path="/opt/pw-browsers/chromium"
-python tests/ui_headless.py "$TEMP/scene_sim_dev.html"
-
-# Run all web tests
-node tests/engine_regression.js      # v1 regression (vs tests/fixtures/engine_v1.js) + new features
-node tests/scenarios_test.js         # All 4 scenarios, 27 generators, ambience WAVs
-python -m pytest ../hil/tests -q     # 31 hil tests
+└── sim_conversation_out/, sim_noise_out/   # Python-sim reference WAVs played by the page (build.py asserts them)
 ```
 
 ## Scene Simulator v2 Features
@@ -59,19 +42,7 @@ python -m pytest ../hil/tests -q     # 31 hil tests
 | Add a noise generator | `web/src/scenarios.js` — add to `NOISE_GEN` (prefix helpers `sc`) |
 | Change beamforming / scoring | `web/src/engine.js` — `render()`, `mpdr()`, `steer()`, SRP |
 | Change UI layout / controls | `web/src/robot_acoustic.template.html` — wrapped in a function, no global clashes |
-| Downstream 8-mic handling | `hil/make_pdm.py` — `load_scene()` reads schema 1 or 2, refuses ≠8 mics |
-
-## Common Commands (from repo root)
-
-```bash
-# Rebuild published page
-cd web && python build.py
-
-# Run downstream pipeline (needs .venv)
-cd .. && .venv/Scripts/python.exe experiments/exp22_frontend_in_loop.py scene.zip 4
-.venv/Scripts/python.exe experiments/exp24_firmware_fir.py scene.zip 4
-.venv/Scripts/python.exe experiments/exp25_firmware_8mic.py scene.zip 4
-```
+| Downstream 8-mic handling | not in this repo (`hil/make_pdm.py` in the robot-audio project reads schema 1 or 2, refuses ≠8 mics) |
 
 ## Known Gaps (as of 2026-10-10)
 
@@ -80,7 +51,6 @@ cd .. && .venv/Scripts/python.exe experiments/exp22_frontend_in_loop.py scene.zi
 - **All ambience is synthesised**: no recorded rooms/machines/cars. Realism is qualitative only.
 - **SRP elevation**: a planar ring reports `el: null` (it can't resolve elevation). Dual ring estimates it in 15° steps;
   coarse, and a gap well above ~5 cm aliases at 3.5 kHz (one miss seen at 20 cm).
-- `hil` tests: 5 skip here (need `PRU_SIM` / `AUDIO_PIPE` on MK's PC).
 
 ### Resolved 2026-10-10
 - **Engine v1 regression now confirmed passing.** The test used `git show HEAD:web/src/engine.js` as "v1", but HEAD
@@ -98,11 +68,4 @@ cd .. && .venv/Scripts/python.exe experiments/exp22_frontend_in_loop.py scene.zi
 
 ## Push to GitHub
 
-```bash
-# From repo root (robot-audio/)
-git add -A
-git commit -m "Scene Simulator v2: 4 scenarios, 3D sources, variable mics, damping, side view TODO"
-git push origin main
-```
-
-The GitHub remote is `https://github.com/accio-sunshine/Scene_Simulator.git`.
+The GitHub remote is `https://github.com/accio-sunshine/scenes`.
