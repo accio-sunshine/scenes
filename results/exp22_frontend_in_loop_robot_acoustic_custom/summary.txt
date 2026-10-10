@@ -1,0 +1,22 @@
+exp22_frontend_in_loop_robot_acoustic_custom
+Does a simulated scene survive PDM + the AM243x front-end, and does the player reproduce it?
+
+                                           check |                                                                      result
+-------------------------------------------------+----------------------------------------------------------------------------
+                                     tone 500 Hz |                                                SINAD 82.6 dB, gain -0.02 dB
+                                    tone 1000 Hz |                                                SINAD 96.8 dB, gain -0.01 dB
+                                    tone 3000 Hz |                                                SINAD 96.5 dB, gain -0.02 dB
+                                    tone 6000 Hz |                                                SINAD 94.1 dB, gain -0.02 dB
+                                 front-end delay |                            15.27 samples = 0.95 ms (whole chain, incl. FIR)
+SI-SDR per mic vs ideal front-end (min / median) |                                                              31.5 / 32.2 dB
+           timing error between mics (max - min) |                                                              0.0000 samples
+                level change per mic (max - min) |                                                                    0.001 dB
+ SRP-PHAT directions original -> after PDM (deg) |                                                                  180 -> 180
+                      PRU player, pins vs stream | 0 wrong of 12000 edges (ring wraps: 6000 > 4096 bytes), status 1 (1 = done)
+                  PRU player, edge -> data valid |                                         8 ns worst case (mic allows 100 ns)
+
+Scene: robot_acoustic_custom.zip; first 4 s, scaled by 0.667 so the peak is 0.6 of full scale.
+SI-SDR is against the original low-passed at 7 kHz and run through the same DC blocker (vs the raw original: ~22 dB, that is the blocker's phase shift near 20 Hz).
+The FIR is a Python stand-in, not the firmware table; swap in the audio_pipe coefficients for a bit-exact check.
+Not modelled: mic self-noise, gain/phase mismatch, the real mic level of -26 dBFS (R-13).
+Player timing assumes a 250 MHz PRU core, GPI0 clock, R30[3:0] data: all VERIFY in the TRM / schematic.

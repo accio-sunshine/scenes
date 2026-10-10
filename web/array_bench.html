@@ -1,0 +1,656 @@
+<title>8-Mic Array Bench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: instrument bench. Knob rack on the left, readouts + room plan + spectrum on the right; stacks on phones. */
+:root {
+  --bg: #eef1f4;
+  --panel: #ffffff;
+  --ink: #16202b;
+  --muted: #5a6877;
+  --line: #d3dae2;
+  --well: #e4e9ef;
+  --talkA: #2557c4;
+  --talkB: #b56a00;
+  --music: #7a4cb8;
+  --srp: #0f7f6c;
+  --good: #1d7a3e;
+  --bad: #b3261e;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --panel: #19212a; --ink: #e5ebf1; --muted: #93a1b0; --line: #2c3743; --well: #222c37;
+    --talkA: #7aa2ff; --talkB: #f0a640; --music: #b892f0; --srp: #3fc9ad; --good: #5fcf86; --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --panel: #19212a; --ink: #e5ebf1; --muted: #93a1b0; --line: #2c3743; --well: #222c37;
+  --talkA: #7aa2ff; --talkB: #f0a640; --music: #b892f0; --srp: #3fc9ad; --good: #5fcf86; --bad: #ff8a80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.5; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 20px; }
+header { display: grid; gap: 4px; }
+h1 { font-family: var(--display); font-stretch: 80%; font-weight: 800; font-size: 30px; letter-spacing: .01em; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+h2 { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; margin: 0; color: var(--muted); }
+.bench { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.rack { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+@media (max-width: 860px) { .rack { position: static; } }
+.group { display: grid; gap: 10px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 14px; }
+.knob { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: baseline; }
+.knob label { font-weight: 500; }
+.knob output { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.knob input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--talkA); margin: 2px 0 0; }
+.knob.b input[type=range] { accent-color: var(--talkB); }
+.knob .hint { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { accent-color: var(--talkB); width: 16px; height: 16px; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+button, select { font: inherit; color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:hover, select:hover { border-color: var(--muted); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--talkA); outline-offset: 2px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; padding: 4px 12px; }
+.seg button[aria-pressed=true] { background: var(--ink); color: var(--panel); }
+select { width: 100%; }
+
+.main { display: grid; gap: 20px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.tile .k { font-family: var(--display); font-stretch: 85%; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.tile .v { font-family: var(--mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .v small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.tile .d { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tile .py { font-family: var(--mono); font-size: 12px; color: var(--muted); border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 6px; }
+.up { color: var(--good); } .down { color: var(--bad); }
+.figs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 1100px) { .figs { grid-template-columns: minmax(0, 1fr); } }
+figure { margin: 0; display: grid; gap: 10px; }
+.fighead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; }
+svg { width: 100%; height: auto; display: block; }
+svg text { font-family: var(--body); fill: var(--muted); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+.legend .dash::before { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 7px); }
+.warn { color: var(--bad); font-size: 12px; margin: 0; }
+pre { margin: 0; font-family: var(--mono); font-size: 12.5px; background: var(--well); border-radius: 8px; padding: 12px; overflow-x: auto; white-space: pre; }
+.about { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 860px) { .about { grid-template-columns: minmax(0, 1fr); } }
+.about p, .about li { max-width: 68ch; color: var(--muted); }
+.about ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+code { font-family: var(--mono); font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>8-Mic Array Bench</h1>
+    <p>Interactive version of <code>sim_8mic_room.py</code>. Move a knob and the direction finding (MUSIC, SRP-PHAT) and beamforming (delay-and-sum, MVDR) update straight away. Click the room plan to move a talker.</p>
+  </header>
+
+  <div class="bench">
+    <aside class="panel rack" aria-label="Scene knobs">
+      <div class="group">
+        <h2>Start from</h2>
+        <select id="preset" aria-label="Preset scene"></select>
+        <p class="note" id="presetNote"></p>
+      </div>
+
+      <div class="group">
+        <h2>Room</h2>
+        <div class="knob"><label for="rt60">Echo time RT60</label><output id="rt60_o"></output>
+          <input type="range" id="rt60" min="0.15" max="1.2" step="0.05"><span class="hint">0.2 dry office · 0.5 living room · 0.8 echoey hall</span></div>
+        <div class="knob"><label for="snr">Background noise SNR</label><output id="snr_o"></output>
+          <input type="range" id="snr" min="-5" max="35" step="1"><span class="hint">dB below the talkers, at mic 1</span></div>
+        <div class="knob"><label for="L">Room length</label><output id="L_o"></output>
+          <input type="range" id="L" min="3" max="12" step="0.5"></div>
+        <div class="knob"><label for="W">Room width</label><output id="W_o"></output>
+          <input type="range" id="W" min="3" max="12" step="0.5"></div>
+        <div class="knob"><label for="H">Room height</label><output id="H_o"></output>
+          <input type="range" id="H" min="2.2" max="6" step="0.1"></div>
+      </div>
+
+      <div class="group">
+        <h2>Array</h2>
+        <div class="knob"><label for="radius">Array radius</label><output id="radius_o"></output>
+          <input type="range" id="radius" min="2" max="15" step="0.5"><span class="hint">5 cm = 10 cm across, robot-head sized</span></div>
+      </div>
+
+      <div class="group">
+        <h2>Talkers</h2>
+        <div class="knob"><label for="angA">Talker A direction</label><output id="angA_o"></output>
+          <input type="range" id="angA" min="0" max="359" step="1"><span class="hint">The one the beamformers focus on</span></div>
+        <label class="check"><input type="checkbox" id="two"> Second talker B</label>
+        <div class="knob b"><label for="angB">Talker B direction</label><output id="angB_o"></output>
+          <input type="range" id="angB" min="0" max="359" step="1"></div>
+        <div class="knob"><label for="dist">Talker distance</label><output id="dist_o"></output>
+          <input type="range" id="dist" min="0.3" max="3.5" step="0.05"><span class="hint">Both talkers, from the array centre</span></div>
+        <p class="warn" id="roomWarn" hidden></p>
+      </div>
+
+      <div class="group">
+        <h2>Page-only knobs</h2>
+        <div class="knob"><label for="nmics">Number of mics</label><output id="nmics_o"></output>
+          <input type="range" id="nmics" min="4" max="16" step="1"></div>
+        <div class="knob"><label for="fmax">DOA band top</label><output id="fmax_o"></output>
+          <input type="range" id="fmax" min="1000" max="7500" step="250"><span class="hint">Band starts at 300 Hz. Python fixes 8 mics and 300–3500 Hz.</span></div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <section class="tiles" aria-label="Results">
+        <div class="tile"><span class="k">Mic 1 alone</span><span class="v" id="t_mic"></span><span class="d">talker A vs everything else</span><span class="py" id="p_mic" hidden></span></div>
+        <div class="tile"><span class="k">Delay-and-sum</span><span class="v" id="t_das"></span><span class="d" id="g_das"></span><span class="py" id="p_das" hidden></span></div>
+        <div class="tile"><span class="k">MVDR</span><span class="v" id="t_mvdr"></span><span class="d" id="g_mvdr"></span><span class="py" id="p_mvdr" hidden></span></div>
+        <div class="tile"><span class="k">MUSIC finds</span><span class="v" id="t_music"></span><span class="d" id="e_music"></span><span class="py" id="p_music" hidden></span></div>
+        <div class="tile"><span class="k">SRP-PHAT finds</span><span class="v" id="t_srp"></span><span class="d" id="e_srp"></span><span class="py" id="p_srp" hidden></span></div>
+      </section>
+
+      <div class="figs">
+        <figure class="panel">
+          <div class="fighead">
+            <h2>Room plan, seen from above</h2>
+            <div class="row"><span class="note">Click places</span>
+              <div class="seg" role="group" aria-label="Talker placed by clicking"><button id="placeA" aria-pressed="true">A</button><button id="placeB" aria-pressed="false">B</button></div></div>
+          </div>
+          <svg id="plan" role="img" aria-label="Top-down room plan with array, talkers and beam patterns"></svg>
+          <div class="legend">
+            <span style="--c: var(--talkA)">MVDR beam</span>
+            <span class="dash" style="--c: var(--muted)">Delay-and-sum beam</span>
+            <span class="dash" style="--c: var(--srp)">SRP-PHAT estimate</span>
+          </div>
+          <p class="note">Beam patterns are drawn around the array (radius 0 dB = 1 m, inner ring −30 dB). The mic ring is enlarged so you can see it.</p>
+        </figure>
+
+        <figure class="panel">
+          <div class="fighead"><h2>Where is sound coming from?</h2></div>
+          <svg id="doa" role="img" aria-label="Direction-of-arrival spectrum"></svg>
+          <div class="legend">
+            <span style="--c: var(--music)">MUSIC</span>
+            <span style="--c: var(--srp)">SRP-PHAT</span>
+            <span class="dash" style="--c: var(--talkA)">True A</span>
+            <span class="dash" style="--c: var(--talkB)">True B</span>
+          </div>
+          <p class="note">Each curve is scaled 0 to 1, like <code>doa_spectrum.png</code>. The highest peaks are the estimates.</p>
+        </figure>
+      </div>
+
+      <section class="panel">
+        <div class="fighead">
+          <h2>Use this scene in Python</h2>
+          <button id="copy">Copy</button>
+        </div>
+        <pre id="snippet"></pre>
+        <p class="note" id="snipNote">Paste it into the scene list of a new file in <code>experiments/</code>, then run it to get real audio and scores.</p>
+      </section>
+
+      <section class="panel about">
+        <div>
+          <h2>How the page computes this</h2>
+          <ul>
+            <li>Same geometry as Python: array at the room centre, 1.5 m high, mic 1 at 0°, angles counter-clockwise.</li>
+            <li>Sound reaching each mic = the direct path plus wall reflections up to 2 bounces (exact image sources), plus late echo as a diffuse field whose level comes from Sabine's formula.</li>
+            <li>Background noise is independent on every mic, set to the SNR at mic 1, as in Python.</li>
+            <li>Beamformers use the same far-field steering, delay-and-sum weights and MVDR (MPDR form, mixture covariance, 1e-3 loading) as <code>sim_8mic_room.py</code>.</li>
+            <li>dB scores cover 0–8 kHz and are weighted by the measured spectrum of the two speech clips. Talker A's clip is 2.5 dB louder than B's, as in Python. Direction finding uses 300 Hz up to the band-top knob.</li>
+          </ul>
+        </div>
+        <div>
+          <h2>How far to trust it</h2>
+          <p>Use it to explore trends and choose scenes. Then confirm in Python. Checked against every experiment scene: delay-and-sum and mic-1 scores land within about 0.5 dB of <code>summary.txt</code> in most scenes, MVDR within about 1.5 dB, and SRP-PHAT within a few degrees. MUSIC is the least reliable match, because reflections beyond two bounces and the changing speech content are left out. Choose a preset to see the Python result for that scene under each tile.</p>
+          <p>Change any knob and the Python line disappears, since that scene has not been simulated yet.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const C = 343, FS = 16000, FMIN = 300, DF = 62.5;
+// Power spectra of the two CMU Arctic clips (talker A, talker B), 62.5 Hz bins from 62.5 Hz to 7.94 kHz.
+const SPEECH_A = [5.9,21.9,20.6,22.6,12.3,9.92,9.82,14.5,9.21,3.3,2.94,3.48,1.2,0.949,0.911,0.856,0.579,0.541,0.296,0.366,0.559,0.827,1.25,1.42,0.961,0.563,0.494,0.366,0.25,0.178,0.233,0.214,0.174,0.169,0.186,0.263,0.24,0.22,0.221,0.24,0.28,0.292,0.349,0.199,0.122,0.0988,0.0833,0.064,0.0712,0.0954,0.116,0.0924,0.0845,0.0863,0.105,0.121,0.179,0.199,0.186,0.12,0.115,0.125,0.1,0.11,0.0986,0.1,0.0697,0.0592,0.051,0.0456,0.0422,0.0312,0.0535,0.121,0.153,0.138,0.192,0.143,0.127,0.109,0.0926,0.0944,0.135,0.173,0.251,0.225,0.234,0.293,0.22,0.147,0.0996,0.103,0.105,0.154,0.13,0.0644,0.0421,0.0591,0.0666,0.0612,0.0696,0.142,0.208,0.122,0.104,0.133,0.113,0.08,0.0826,0.0884,0.0844,0.0827,0.118,0.119,0.0885,0.0523,0.0294,0.015,0.0124,0.00716,0.00203,0.000655,0.000234,3.63e-05,1.82e-06,9.83e-08,5.18e-08];
+const SPEECH_B = [0.0422,0.999,13.1,21.7,5.07,2.21,7.05,8.29,1.94,1.48,6.46,6.27,1.2,1.17,2.86,2.03,0.647,0.704,1.05,0.427,0.268,0.336,0.522,0.235,0.226,0.342,0.291,0.195,0.213,0.294,0.324,0.287,0.27,0.34,0.491,0.299,0.158,0.253,0.342,0.164,0.171,0.307,0.322,0.262,0.261,0.239,0.179,0.123,0.101,0.104,0.0593,0.023,0.0177,0.0178,0.0125,0.00857,0.0123,0.0169,0.0131,0.0119,0.0214,0.0296,0.0291,0.0252,0.0365,0.0501,0.0426,0.037,0.0435,0.0365,0.0223,0.0206,0.0178,0.0158,0.0148,0.0137,0.0144,0.0155,0.0105,0.0073,0.00939,0.00698,0.00279,0.00176,0.00214,0.00204,0.00173,0.00171,0.00174,0.00146,0.00114,0.000964,0.00121,0.00117,0.00119,0.001,0.000774,0.000668,0.000823,0.000975,0.000764,0.000789,0.000804,0.000719,0.000925,0.000864,0.00083,0.00108,0.00148,0.0022,0.00206,0.00143,0.000648,0.000313,0.000255,0.0003,0.000176,0.000114,6.81e-05,3.57e-05,9.54e-06,1.67e-06,4.4e-07,1.14e-07,2.88e-08,1.8e-08,1.67e-08];
+const DEFAULTS = { rt60: 0.5, radius: 5, snr: 15, angA: 40, angB: 150, two: true, dist: 1.5, L: 6, W: 5, H: 3, nmics: 8, fmax: 3500 };
+
+// Python results from results/<exp>/summary.txt: [MUSIC, SRP, mic dB, DAS dB, MVDR dB]
+const PRESETS = [
+  { g: "Default scene", items: [["Default (two talkers)", {}, ["41 332", "37 155", 2.3, 3.2, 4.9]]] },
+  { g: "exp01 echo levels", items: [
+    ["rt02_dry", { rt60: 0.2 }, ["20 32", "40 147", 2.2, 3.7, 6.4]],
+    ["rt05_medium", { rt60: 0.5 }, ["41 332", "37 155", 2.3, 3.2, 4.9]],
+    ["rt08_echoey", { rt60: 0.8 }, ["39 323", "32 161", 2.2, 3.0, 3.3]]] },
+  { g: "exp02 array size", items: [
+    ["r3cm", { radius: 3 }, ["18 51", "43 143", 2.2, 2.7, 5.1]],
+    ["r5cm", { radius: 5 }, ["41 332", "37 155", 2.3, 3.2, 4.9]],
+    ["r10cm", { radius: 10 }, ["41 148", "40 160", 2.3, 4.4, 4.4]]] },
+  { g: "exp03 background noise", items: [
+    ["snr25_quiet", { snr: 25 }, ["42 332", "36 158", 2.6, 3.3, 6.1]],
+    ["snr15_medium", { snr: 15 }, ["41 332", "37 155", 2.3, 3.2, 4.9]],
+    ["snr05_loud", { snr: 5 }, ["51 335", "38 150", -0.1, 2.7, 2.8]]] },
+  { g: "exp04 talker spacing", items: [
+    ["one_talker", { two: false }, ["28", "38", 15.0, 23.1, 8.9]],
+    ["b150_110deg_apart", { angB: 150 }, ["41 332", "37 155", 2.3, 3.2, 4.9]],
+    ["b90_50deg_apart", { angB: 90 }, ["56 87", "77 274", -1.4, -1.7, 5.0]],
+    ["b70_30deg_apart", { angB: 70 }, ["42 53", "46 162", 0.8, 1.1, 2.3]]] },
+  { g: "exp23 talker distance", items: [
+    ["d075_close", { dist: 0.75 }, ["33 41", "40 147", 3.7, 4.3, 6.3]],
+    ["d150_medium", { dist: 1.5 }, ["41 332", "37 155", 2.3, 3.2, 4.9]],
+    ["d225_far", { dist: 2.25 }, ["43 335", "38 147", 0.1, 0.6, 4.3]]] },
+];
+
+const KNOBS = {
+  rt60: v => v.toFixed(2) + " s", snr: v => v + " dB", L: v => v.toFixed(1) + " m", W: v => v.toFixed(1) + " m",
+  H: v => v.toFixed(1) + " m", radius: v => v.toFixed(1) + " cm", angA: v => v + "°", angB: v => v + "°",
+  dist: v => v.toFixed(2) + " m", nmics: v => String(v), fmax: v => v + " Hz",
+};
+const $ = id => document.getElementById(id);
+let S = { ...DEFAULTS }, presetIdx = "0:0", place = "A";
+
+// ---------------------------------------------------------------- complex linear algebra
+function cmatSolve(Ar, Ai, br, bi, n) {          // solve A x = b, partial pivoting
+  const ar = Float64Array.from(Ar), ai = Float64Array.from(Ai), xr = Float64Array.from(br), xi = Float64Array.from(bi);
+  for (let k = 0; k < n; k++) {
+    let p = k, best = 0;
+    for (let i = k; i < n; i++) { const m = ar[i*n+k]**2 + ai[i*n+k]**2; if (m > best) { best = m; p = i; } }
+    if (p !== k) {
+      for (let j = 0; j < n; j++) { let t = ar[k*n+j]; ar[k*n+j] = ar[p*n+j]; ar[p*n+j] = t; t = ai[k*n+j]; ai[k*n+j] = ai[p*n+j]; ai[p*n+j] = t; }
+      let t = xr[k]; xr[k] = xr[p]; xr[p] = t; t = xi[k]; xi[k] = xi[p]; xi[p] = t;
+    }
+    const pr = ar[k*n+k], pi = ai[k*n+k], den = pr*pr + pi*pi;
+    for (let i = k + 1; i < n; i++) {
+      const nr = ar[i*n+k], ni = ai[i*n+k];
+      const fr = (nr*pr + ni*pi) / den, fi = (ni*pr - nr*pi) / den;
+      for (let j = k; j < n; j++) {
+        const r = ar[k*n+j], m = ai[k*n+j];
+        ar[i*n+j] -= fr*r - fi*m; ai[i*n+j] -= fr*m + fi*r;
+      }
+      xr[i] -= fr*xr[k] - fi*xi[k]; xi[i] -= fr*xi[k] + fi*xr[k];
+    }
+  }
+  for (let i = n - 1; i >= 0; i--) {
+    let sr = xr[i], si = xi[i];
+    for (let j = i + 1; j < n; j++) { sr -= ar[i*n+j]*xr[j] - ai[i*n+j]*xi[j]; si -= ar[i*n+j]*xi[j] + ai[i*n+j]*xr[j]; }
+    const pr = ar[i*n+i], pi = ai[i*n+i], den = pr*pr + pi*pi;
+    xr[i] = (sr*pr + si*pi) / den; xi[i] = (si*pr - sr*pi) / den;
+  }
+  return [xr, xi];
+}
+function quad(Rr, Ri, wr, wi, n) {               // real(w^H R w)
+  let s = 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const rr = Rr[i*n+j], ri = Ri[i*n+j];
+    const tr = rr*wr[j] - ri*wi[j], ti = rr*wi[j] + ri*wr[j];
+    s += wr[i]*tr + wi[i]*ti;
+  }
+  return s;
+}
+function jacobiEig(A, n) {                       // real symmetric; returns {vals, vecs (column-major in rows)}
+  const a = Float64Array.from(A), v = new Float64Array(n*n);
+  for (let i = 0; i < n; i++) v[i*n+i] = 1;
+  for (let sweep = 0; sweep < 40; sweep++) {
+    let off = 0;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p*n+q]**2;
+    if (off < 1e-22) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+      const apq = a[p*n+q];
+      if (Math.abs(apq) < 1e-30) continue;
+      const theta = (a[q*n+q] - a[p*n+p]) / (2*apq);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta*theta + 1));
+      const c = 1 / Math.sqrt(t*t + 1), s = t*c;
+      for (let k = 0; k < n; k++) {
+        const akp = a[k*n+p], akq = a[k*n+q];
+        a[k*n+p] = c*akp - s*akq; a[k*n+q] = s*akp + c*akq;
+      }
+      for (let k = 0; k < n; k++) {
+        const apk = a[p*n+k], aqk = a[q*n+k];
+        a[p*n+k] = c*apk - s*aqk; a[q*n+k] = s*apk + c*aqk;
+      }
+      for (let k = 0; k < n; k++) {
+        const vkp = v[k*n+p], vkq = v[k*n+q];
+        v[k*n+p] = c*vkp - s*vkq; v[k*n+q] = s*vkp + c*vkq;
+      }
+    }
+  }
+  const vals = Array.from({ length: n }, (_, i) => a[i*n+i]);
+  return { vals, v };
+}
+
+// ---------------------------------------------------------------- acoustics model
+function imageSources(src, room, beta, maxOrder) {
+  const out = [];
+  const R = maxOrder;
+  for (let nx = -R; nx <= R; nx++) for (let ny = -R; ny <= R; ny++) for (let nz = -R; nz <= R; nz++)
+    for (let px = 0; px < 2; px++) for (let py = 0; py < 2; py++) for (let pz = 0; pz < 2; pz++) {
+      const k = Math.abs(nx - px) + Math.abs(nx) + Math.abs(ny - py) + Math.abs(ny) + Math.abs(nz - pz) + Math.abs(nz);
+      if (k > maxOrder) continue;
+      out.push({ p: [(1 - 2*px)*src[0] + 2*nx*room[0], (1 - 2*py)*src[1] + 2*ny*room[1], (1 - 2*pz)*src[2] + 2*nz*room[2]], g: beta**k, k });
+    }
+  return out;
+}
+const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+function compute(s) {
+  const M = s.nmics, r = s.radius / 100, room = [s.L, s.W, s.H];
+  const centre = [s.L/2, s.W/2, 1.5];
+  const rel = Array.from({ length: M }, (_, i) => [r*Math.cos(2*Math.PI*i/M), r*Math.sin(2*Math.PI*i/M)]);
+  const mics = rel.map(q => [centre[0] + q[0], centre[1] + q[1], centre[2]]);
+  const pos = a => [centre[0] + s.dist*Math.cos(a*Math.PI/180), centre[1] + s.dist*Math.sin(a*Math.PI/180), centre[2]];
+  const srcAngles = s.two ? [s.angA, s.angB] : [s.angA];
+  const srcPos = srcAngles.map(pos);
+  const outside = srcPos.some(p => p[0] < 0.1 || p[1] < 0.1 || p[0] > s.L - 0.1 || p[1] > s.W - 0.1);
+
+  const V = s.L*s.W*s.H, Sa = 2*(s.L*s.W + s.L*s.H + s.W*s.H);
+  const alpha = Math.min(0.99, 0.161*V / (Sa*s.rt60)), beta = Math.sqrt(1 - alpha);
+  const Erev = (1 - alpha) / (Math.PI*Sa*alpha);
+  const sources = srcPos.map(p => {
+    const imgs = imageSources(p, room, beta, 2);
+    let early = 0;
+    for (const im of imgs) if (im.k > 0) early += im.g**2 / (16*Math.PI**2*dist3(im.p, centre)**2);
+    return { imgs: imgs.map(im => ({ g: im.g, d: mics.map(m => dist3(im.p, m)) })), late: Math.max(0, Erev - early) };
+  });
+
+  // Every bin up to 8 kHz is scored, weighted by the real speech spectrum (like ratio_db in Python);
+  // direction finding uses only FMIN..fmax.
+  const freqs = SPEECH_A.map((_, i) => (i + 1)*DF);
+  const nf = freqs.length, MM = M*M;
+  const dmic = [];
+  for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) dmic.push(Math.hypot(rel[i][0] - rel[j][0], rel[i][1] - rel[j][1]));
+
+  // per-frequency covariances
+  const RA = [], RI = [];
+  let sigPow = 0;
+  for (let fi = 0; fi < freqs.length; fi++) {
+    const f = freqs[fi], k = 2*Math.PI*f / C;
+    const wts = [SPEECH_A[fi], SPEECH_B[fi]];
+    const gam = dmic.map(d => d < 1e-9 ? 1 : Math.sin(k*d) / (k*d));
+    const covs = sources.map((src, si) => {
+      const hr = new Float64Array(M), hi = new Float64Array(M);
+      for (const im of src.imgs) for (let m = 0; m < M; m++) {
+        const a = im.g / (4*Math.PI*im.d[m]), ph = -k*im.d[m];
+        hr[m] += a*Math.cos(ph); hi[m] += a*Math.sin(ph);
+      }
+      const Rr = new Float64Array(MM), Ri = new Float64Array(MM), w = wts[si];
+      for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+        Rr[i*M+j] = w*(hr[i]*hr[j] + hi[i]*hi[j] + src.late*gam[i*M+j]);
+        Ri[i*M+j] = w*(hi[i]*hr[j] - hr[i]*hi[j]);
+      }
+      return [Rr, Ri];
+    });
+    RA.push(covs[0]);
+    const Ir = new Float64Array(MM), Ii = new Float64Array(MM);
+    if (covs[1]) { Ir.set(covs[1][0]); Ii.set(covs[1][1]); }
+    RI.push([Ir, Ii]);
+    sigPow += covs[0][0][0] + (covs[1] ? covs[1][0][0] : 0);
+  }
+  const noise = sigPow / nf / 10**(s.snr/10);
+  for (const [Ir] of RI) for (let i = 0; i < M; i++) Ir[i*M+i] += noise;
+
+  const steer = (f, ang) => {
+    const u = [Math.cos(ang*Math.PI/180), Math.sin(ang*Math.PI/180)], k = 2*Math.PI*f / C;
+    const dr = new Float64Array(M), di = new Float64Array(M);
+    for (let m = 0; m < M; m++) { const ph = k*(rel[m][0]*u[0] + rel[m][1]*u[1]); dr[m] = Math.cos(ph); di[m] = Math.sin(ph); }
+    return [dr, di];
+  };
+
+  // beamformers toward A
+  let micT = 0, micR = 0, dasT = 0, dasR = 0, mvT = 0, mvR = 0;
+  const NG = 180, beamDas = new Float64Array(NG), beamMv = new Float64Array(NG);
+  const GRID = 360, srp = new Float64Array(GRID), music = new Float64Array(GRID);
+  const nsrc = srcAngles.length;
+  for (let fi = 0; fi < nf; fi++) {
+    const f = freqs[fi], [Ar, Ai] = RA[fi], [Ir, Ii] = RI[fi];
+    micT += Ar[0]; micR += Ir[0];
+    const [dr, di] = steer(f, s.angA);
+    const wr = dr.map(x => x/M), wi = di.map(x => x/M);
+    dasT += quad(Ar, Ai, wr, wi, M); dasR += quad(Ir, Ii, wr, wi, M);
+    const Xr = new Float64Array(MM), Xi = new Float64Array(MM);
+    let tr = 0;
+    for (let q = 0; q < MM; q++) { Xr[q] = Ar[q] + Ir[q]; Xi[q] = Ai[q] + Ii[q]; }
+    for (let i = 0; i < M; i++) tr += Xr[i*M+i];
+    const Lr = Float64Array.from(Xr);
+    for (let i = 0; i < M; i++) Lr[i*M+i] += 1e-3*tr/M;
+    const [yr, yi] = cmatSolve(Lr, Xi, dr, di, M);
+    let nr = 0, ni = 0;
+    for (let m = 0; m < M; m++) { nr += dr[m]*yr[m] + di[m]*yi[m]; ni += dr[m]*yi[m] - di[m]*yr[m]; }
+    const den = nr*nr + ni*ni;
+    const vr = new Float64Array(M), vi = new Float64Array(M);
+    for (let m = 0; m < M; m++) { vr[m] = (yr[m]*nr + yi[m]*ni) / den; vi[m] = (yi[m]*nr - yr[m]*ni) / den; }
+    mvT += quad(Ar, Ai, vr, vi, M); mvR += quad(Ir, Ii, vr, vi, M);
+
+    for (let g = 0; g < NG; g++) {
+      const [er, ei] = steer(f, g*360/NG);
+      let a = 0, b = 0, c = 0, d = 0;
+      for (let m = 0; m < M; m++) { a += wr[m]*er[m] + wi[m]*ei[m]; b += wr[m]*ei[m] - wi[m]*er[m]; c += vr[m]*er[m] + vi[m]*ei[m]; d += vr[m]*ei[m] - vi[m]*er[m]; }
+      beamDas[g] += (a*a + b*b) / nf; beamMv[g] += (c*c + d*d) / nf;
+    }
+
+    // DOA: SRP-PHAT on the normalised cross-spectra, MUSIC on the noise subspace
+    if (f < FMIN || f > s.fmax) continue;
+    const Pr = new Float64Array(MM), Pi = new Float64Array(MM);
+    for (let q = 0; q < MM; q++) { const m = Math.hypot(Xr[q], Xi[q]) || 1; Pr[q] = Xr[q]/m; Pi[q] = Xi[q]/m; }
+    const n2 = 2*M, B = new Float64Array(n2*n2);
+    for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+      B[i*n2+j] = Xr[i*M+j]; B[(i+M)*n2+j+M] = Xr[i*M+j];
+      B[i*n2+j+M] = -Xi[i*M+j]; B[(i+M)*n2+j] = Xi[i*M+j];
+    }
+    const { vals, v } = jacobiEig(B, n2);
+    const order = vals.map((x, i) => [x, i]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
+    const noiseCols = order.slice(0, 2*(M - nsrc));
+    for (let g = 0; g < GRID; g++) {
+      const [er, ei] = steer(f, g);
+      srp[g] += quad(Pr, Pi, er, ei, M);
+      let proj = 0;
+      for (const col of noiseCols) {
+        let p = 0;
+        for (let m = 0; m < M; m++) p += v[m*n2+col]*er[m] + v[(m+M)*n2+col]*ei[m];
+        proj += p*p;
+      }
+      music[g] += 1 / Math.max(proj / 2, 1e-12);
+    }
+  }
+  const db = (a, b) => 10*Math.log10(a / b);
+  return {
+    mic: db(micT, micR), das: db(dasT, dasR), mvdr: db(mvT, mvR),
+    srp: norm(srp), music: norm(music), srpPk: peaks(srp, nsrc), musicPk: peaks(music, nsrc),
+    beamDas: beamDb(beamDas), beamMv: beamDb(beamMv), srcAngles, outside, centre, alpha,
+  };
+}
+function norm(a) { let lo = Infinity, hi = -Infinity; for (const x of a) { lo = Math.min(lo, x); hi = Math.max(hi, x); } return Array.from(a, x => (x - lo) / (hi - lo || 1)); }
+function beamDb(a) { return Array.from(a, x => 10*Math.log10(Math.max(x, 1e-12))); }
+function peaks(a, n) {
+  const N = a.length, pk = [];
+  for (let i = 0; i < N; i++) if (a[i] >= a[(i - 1 + N) % N] && a[i] > a[(i + 1) % N]) pk.push(i);
+  pk.sort((p, q) => a[q] - a[p]);
+  return pk.slice(0, n).sort((p, q) => p - q);
+}
+const angErr = (a, b) => { const d = Math.abs(((a - b) % 360 + 360) % 360); return Math.min(d, 360 - d); };
+
+// ---------------------------------------------------------------- drawing
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+let planGeom = null;
+function drawPlan(res) {
+  const svg = $("plan"); svg.textContent = "";
+  const pad = 28, Wpx = 520, sc = (Wpx - 2*pad) / S.L, Hpx = S.W*sc + 2*pad;
+  svg.setAttribute("viewBox", `0 0 ${Wpx} ${Hpx}`);
+  const X = x => pad + x*sc, Y = y => pad + (S.W - y)*sc;
+  planGeom = { pad, sc, Wpx, Hpx };
+  for (let x = 1; x < S.L; x++) el("line", { x1: X(x), y1: Y(0), x2: X(x), y2: Y(S.W), stroke: "var(--line)", "stroke-width": 1 }, svg);
+  for (let y = 1; y < S.W; y++) el("line", { x1: X(0), y1: Y(y), x2: X(S.L), y2: Y(y), stroke: "var(--line)", "stroke-width": 1 }, svg);
+  el("rect", { x: X(0), y: Y(S.W), width: S.L*sc, height: S.W*sc, fill: "none", stroke: "var(--ink)", "stroke-width": 2 }, svg);
+  el("text", { x: X(S.L/2), y: Hpx - 8, "text-anchor": "middle" }, svg, `${S.L.toFixed(1)} m`);
+  el("text", { x: 10, y: Y(S.W/2), "text-anchor": "middle", transform: `rotate(-90 10 ${Y(S.W/2)})` }, svg, `${S.W.toFixed(1)} m`);
+  el("text", { x: X(S.L) - 4, y: Y(S.W) + 14, "text-anchor": "end" }, svg, "1 m grid");
+
+  const cx = X(res.centre[0]), cy = Y(res.centre[1]);
+  const ring = (dB) => (Math.max(-30, Math.min(6, dB)) + 30) / 30 * sc;   // 0 dB -> 1 m
+  el("circle", { cx, cy, r: ring(-30) + 0.01, fill: "none", stroke: "var(--line)", "stroke-dasharray": "2 3" }, svg);
+  el("circle", { cx, cy, r: ring(0), fill: "none", stroke: "var(--line)", "stroke-dasharray": "2 3" }, svg);
+  const beamPath = arr => arr.map((v, g) => {
+    const a = g*2*Math.PI/arr.length, rr = ring(v);
+    return (g ? "L" : "M") + (cx + rr*Math.cos(a)).toFixed(1) + " " + (cy - rr*Math.sin(a)).toFixed(1);
+  }).join(" ") + "Z";
+  el("path", { d: beamPath(res.beamMv), fill: "var(--talkA)", "fill-opacity": 0.14, stroke: "var(--talkA)", "stroke-width": 1.5 }, svg);
+  el("path", { d: beamPath(res.beamDas), fill: "none", stroke: "var(--muted)", "stroke-width": 1.2, "stroke-dasharray": "4 3" }, svg);
+
+  for (const a of res.srpPk) {
+    const t = a*Math.PI/180;
+    el("line", { x1: cx, y1: cy, x2: cx + 1.15*S.dist*sc*Math.cos(t), y2: cy - 1.15*S.dist*sc*Math.sin(t), stroke: "var(--srp)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
+  }
+  const mr = Math.max(9, S.radius*1.6);
+  el("circle", { cx, cy, r: mr, fill: "var(--panel)", stroke: "var(--ink)", "stroke-width": 1.2 }, svg);
+  for (let i = 0; i < S.nmics; i++) {
+    const t = 2*Math.PI*i/S.nmics;
+    el("circle", { cx: cx + mr*Math.cos(t), cy: cy - mr*Math.sin(t), r: i === 0 ? 3 : 2.2, fill: i === 0 ? "var(--ink)" : "var(--muted)" }, svg);
+  }
+  const talkers = [["A", S.angA, "var(--talkA)"]];
+  if (S.two) talkers.push(["B", S.angB, "var(--talkB)"]);
+  for (const [name, ang, col] of talkers) {
+    const t = ang*Math.PI/180, tx = cx + S.dist*sc*Math.cos(t), ty = cy - S.dist*sc*Math.sin(t);
+    el("line", { x1: cx, y1: cy, x2: tx, y2: ty, stroke: col, "stroke-width": 1, "stroke-opacity": 0.6 }, svg);
+    el("circle", { cx: tx, cy: ty, r: 11, fill: col }, svg);
+    el("text", { x: tx, y: ty + 4, "text-anchor": "middle", style: "fill: var(--panel); font-weight: 700; font-size: 12px" }, svg, name);
+  }
+}
+function drawDoa(res) {
+  const svg = $("doa"); svg.textContent = "";
+  const Wpx = 560, Hpx = 300, l = 36, rgt = 12, t = 14, b = 34, w = Wpx - l - rgt, h = Hpx - t - b;
+  svg.setAttribute("viewBox", `0 0 ${Wpx} ${Hpx}`);
+  const X = a => l + a/360*w, Y = v => t + (1 - v)*h;
+  for (let a = 0; a <= 360; a += 45) {
+    el("line", { x1: X(a), y1: t, x2: X(a), y2: t + h, stroke: "var(--line)" }, svg);
+    el("text", { x: X(a), y: t + h + 16, "text-anchor": "middle" }, svg, a + "°");
+  }
+  for (const v of [0, 0.5, 1]) {
+    el("line", { x1: l, y1: Y(v), x2: l + w, y2: Y(v), stroke: "var(--line)" }, svg);
+    el("text", { x: l - 6, y: Y(v) + 4, "text-anchor": "end" }, svg, v.toFixed(1));
+  }
+  el("text", { x: l + w/2, y: Hpx - 4, "text-anchor": "middle" }, svg, "direction (deg)");
+  const cols = [["var(--talkA)", S.angA]];
+  if (S.two) cols.push(["var(--talkB)", S.angB]);
+  for (const [c, a] of cols) el("line", { x1: X(a), y1: t, x2: X(a), y2: t + h, stroke: c, "stroke-width": 1.5, "stroke-dasharray": "5 4" }, svg);
+  const line = (arr, col) => el("path", { d: arr.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" "), fill: "none", stroke: col, "stroke-width": 2 }, svg);
+  line(res.music, "var(--music)");
+  line(res.srp, "var(--srp)");
+  for (const [pk, arr, col] of [[res.musicPk, res.music, "var(--music)"], [res.srpPk, res.srp, "var(--srp)"]])
+    for (const a of pk) el("circle", { cx: X(a), cy: Y(arr[a]), r: 4, fill: "var(--panel)", stroke: col, "stroke-width": 2 }, svg);
+}
+
+// ---------------------------------------------------------------- UI
+function fmtDb(v) { return `${v >= 0 ? "" : "−"}${Math.abs(v).toFixed(1)}<small> dB</small>`; }
+function gain(v, ref) {
+  const g = v - ref, cls = g >= 0 ? "up" : "down";
+  return `<span class="${cls}">${g >= 0 ? "+" : "−"}${Math.abs(g).toFixed(1)} dB</span> vs mic 1`;
+}
+function currentPreset() {
+  const [gi, ii] = presetIdx.split(":").map(Number);
+  const item = PRESETS[gi]?.items[ii];
+  if (!item) return null;
+  const want = { ...DEFAULTS, ...item[1] };
+  const same = Object.keys(DEFAULTS).every(k => (k === "angB" && !want.two) ? true : want[k] === S[k]);
+  return { name: item[0], py: item[2], same };
+}
+function render() {
+  for (const k in KNOBS) { $(k).value = S[k]; $(k + "_o").textContent = KNOBS[k](S[k]); }
+  $("two").checked = S.two;
+  $("angB").disabled = !S.two;
+  const res = compute(S);
+  $("t_mic").innerHTML = fmtDb(res.mic);
+  $("t_das").innerHTML = fmtDb(res.das); $("g_das").innerHTML = gain(res.das, res.mic);
+  $("t_mvdr").innerHTML = fmtDb(res.mvdr); $("g_mvdr").innerHTML = gain(res.mvdr, res.mic);
+  const errs = pk => res.srcAngles.map(a => Math.min(...pk.map(p => angErr(p, a))));
+  const errTxt = pk => "off by " + errs(pk).map(e => e + "°").join(", ") + (S.two ? " (A, B)" : "");
+  $("t_music").innerHTML = res.musicPk.map(a => a + "°").join(" ");
+  $("t_srp").innerHTML = res.srpPk.map(a => a + "°").join(" ");
+  $("e_music").textContent = errTxt(res.musicPk);
+  $("e_srp").textContent = errTxt(res.srpPk);
+
+  const p = currentPreset();
+  const showPy = p && p.same && p.py;
+  const pyVals = showPy ? { p_music: p.py[0].split(" ").map(a => a + "°").join(" "), p_srp: p.py[1].split(" ").map(a => a + "°").join(" "), p_mic: p.py[2].toFixed(1) + " dB", p_das: p.py[3].toFixed(1) + " dB", p_mvdr: p.py[4].toFixed(1) + " dB" } : {};
+  for (const id of ["p_mic", "p_das", "p_mvdr", "p_music", "p_srp"]) {
+    $(id).hidden = !showPy;
+    if (showPy) $(id).textContent = "Python: " + pyVals[id];
+  }
+  $("presetNote").textContent = !p ? "" : !p.same ? `Changed from ${p.name}. Python result not available for this scene.`
+    : p.py ? `${p.name}: Python result shown under each tile.` : `${p.name}: run experiments/exp23_talker_distance.py for the Python result.`;
+
+  $("roomWarn").hidden = !res.outside;
+  $("roomWarn").textContent = res.outside ? "A talker is outside the room or touching a wall. Shorten the distance or enlarge the room." : "";
+  drawPlan(res); drawDoa(res);
+  snippet();
+}
+function snippet() {
+  const py = [];
+  if (S.rt60 !== DEFAULTS.rt60) py.push(`rt60=${S.rt60}`);
+  if (S.radius !== DEFAULTS.radius) py.push(`radius=${+(S.radius/100).toFixed(3)}`);
+  if (S.snr !== DEFAULTS.snr) py.push(`snr_db=${S.snr}`);
+  if (S.angA !== DEFAULTS.angA) py.push(`angle_a=${S.angA}`);
+  if (!S.two) py.push("angle_b=None"); else if (S.angB !== DEFAULTS.angB) py.push(`angle_b=${S.angB}`);
+  if (S.dist !== DEFAULTS.dist) py.push(`dist=${S.dist}`);
+  if (S.L !== DEFAULTS.L || S.W !== DEFAULTS.W || S.H !== DEFAULTS.H) py.push(`room=(${S.L.toFixed(1)}, ${S.W.toFixed(1)}, ${S.H.toFixed(1)})`);
+  $("snippet").textContent = `("my_scene", dict(${py.join(", ")})),`;
+  const extra = [];
+  if (S.nmics !== 8) extra.push(`N_MICS = ${S.nmics}`);
+  if (S.fmax !== 3500) extra.push(`freq_range=[300, ${S.fmax}]`);
+  $("snipNote").innerHTML = extra.length
+    ? `Page-only knobs changed: ${extra.map(e => `<code>${e}</code>`).join(" and ")}. These are fixed in <code>sim_8mic_room.py</code>; edit them there to match.`
+    : "Paste it into the scene list of a new file in <code>experiments/</code>, then run it to get real audio and scores.";
+}
+
+let pending = false;
+function schedule() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+for (const k in KNOBS) $(k).addEventListener("input", e => { S[k] = +e.target.value; schedule(); });
+$("two").addEventListener("change", e => { S.two = e.target.checked; schedule(); });
+
+const sel = $("preset");
+PRESETS.forEach((grp, gi) => {
+  const og = document.createElement("optgroup"); og.label = grp.g;
+  grp.items.forEach((it, ii) => { const o = document.createElement("option"); o.value = `${gi}:${ii}`; o.textContent = it[0]; og.appendChild(o); });
+  sel.appendChild(og);
+});
+sel.addEventListener("change", () => {
+  presetIdx = sel.value;
+  const [gi, ii] = presetIdx.split(":").map(Number);
+  S = { ...DEFAULTS, ...PRESETS[gi].items[ii][1] };
+  schedule();
+});
+for (const [id, who] of [["placeA", "A"], ["placeB", "B"]]) $(id).addEventListener("click", () => {
+  place = who; $("placeA").setAttribute("aria-pressed", who === "A"); $("placeB").setAttribute("aria-pressed", who === "B");
+});
+$("plan").addEventListener("click", e => {
+  if (!planGeom) return;
+  const svg = $("plan"), rect = svg.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width*planGeom.Wpx, y = (e.clientY - rect.top) / rect.height*planGeom.Hpx;
+  const mx = (x - planGeom.pad) / planGeom.sc, my = S.W - (y - planGeom.pad) / planGeom.sc;
+  const dx = mx - S.L/2, dy = my - S.W/2;
+  const ang = Math.round(((Math.atan2(dy, dx)*180/Math.PI) + 360) % 360) % 360;
+  const d = Math.max(0.3, Math.min(3.5, Math.round(Math.hypot(dx, dy)*20) / 20));
+  if (place === "A") S.angA = ang; else { S.angB = ang; S.two = true; }
+  S.dist = d;
+  schedule();
+});
+$("copy").addEventListener("click", () => {
+  const txt = $("snippet").textContent;
+  navigator.clipboard?.writeText(txt).then(() => { $("copy").textContent = "Copied"; setTimeout(() => $("copy").textContent = "Copy", 1500); })
+    .catch(() => { const r = document.createRange(); r.selectNodeContents($("snippet")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+});
+render();
+</script>

@@ -1,0 +1,1310 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scene Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: the robot's head at the centre of its own world on the left, its knobs on the right,
+   then a full-width viewer (timeline, waveform, spectrogram) and the lists of things to hear. */
+:root {
+  --bg: #EEF1F4; --panel: #FFFFFF; --ink: #1D2733; --soft: #5B6876; --line: #D3DAE2; --head: #E2E7ED;
+  --mic: #2F6FB0; --micoff: #B9C3CE; --a: #C8891A; --b: #2A8C82; --baby: #B5527A;
+  --noise: #6A5ACD; --srp: #C0392B; --wave: #2F6FB0;
+  --s1: #B7710B; --s2: #17877B; --s3: #B5427A; --s4: #3E6FD0; --s5: #6E7F1A; --warn: #8A5A00; --warnbg: #FFF4D6;
+  --spec0: #F4F6F9; --spec1: #2F6FB0; --spec2: #1D2733;
+  --good: #1E7B45; --bad: #B3261E;
+  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141A21; --panel: #1C242D; --ink: #E6EBF0; --soft: #9AA7B4; --line: #2E3946; --head: #242E39;
+    --mic: #6FA6E0; --micoff: #3C4856; --a: #E0A643; --b: #4DB8AC; --baby: #D9789E;
+    --noise: #A397F0; --srp: #FF7A6B; --wave: #6FA6E0;
+    --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
+    --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
+    --good: #5FCF86; --bad: #FF8A80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141A21; --panel: #1C242D; --ink: #E6EBF0; --soft: #9AA7B4; --line: #2E3946; --head: #242E39;
+  --mic: #6FA6E0; --micoff: #3C4856; --a: #E0A643; --b: #4DB8AC; --baby: #D9789E;
+  --noise: #A397F0; --srp: #FF7A6B; --wave: #6FA6E0;
+  --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
+  --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
+  --good: #5FCF86; --bad: #FF8A80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+main { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 56px; display: grid; gap: 20px; }
+h1 { font-size: 2rem; line-height: 1.15; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
+.lead { color: var(--soft); margin: 0; font-size: 1.02rem; }
+h2 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+h3 { font-size: .8rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); }
+.hint { color: var(--soft); font-size: .88rem; margin: 0; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
+.top { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 20px; align-items: stretch; }
+@media (max-width: 880px) { .top { grid-template-columns: minmax(0, 1fr); } }
+.intro { gap: 14px; }
+.intro-top { display: grid; gap: 8px; }
+.intro-top p:last-child { margin: 0; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: st; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 880px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .steps { grid-template-columns: minmax(0, 1fr); } }
+.steps li { counter-increment: st; background: var(--bg); border-radius: 10px; padding: 12px 14px 12px 48px; position: relative; display: grid; gap: 2px; align-content: start; }
+.steps li::before { content: counter(st); position: absolute; left: 14px; top: 12px; width: 24px; height: 24px; border-radius: 50%; background: var(--mic); color: #fff; font-weight: 700; font-size: .8rem; display: grid; place-items: center; }
+.steps b { font-weight: 600; }
+.steps span { color: var(--soft); font-size: .88rem; }
+.about { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 880px) { .about { grid-template-columns: minmax(0, 1fr); } }
+.about > div { display: grid; gap: 4px; align-content: start; }
+.about p { margin: 0; color: var(--soft); font-size: .88rem; }
+.lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 880px) { .lists { grid-template-columns: minmax(0, 1fr); } }
+
+/* head */
+#head { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; touch-action: none; }
+#head text { font-family: var(--sans); }
+.person { cursor: grab; }
+.person:active { cursor: grabbing; }
+.mic, .chip { cursor: pointer; }
+.mic:focus-visible circle, .chip:focus-visible rect, .person:focus-visible circle { stroke: var(--ink); stroke-width: 3; }
+:is(.mic, .chip, .person):focus { outline: none; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .82rem; color: var(--soft); justify-content: center; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.legend .tri::before { border-radius: 0; clip-path: polygon(50% 100%, 0 0, 100% 0); }
+.legend .box::before { border-radius: 3px; background: none; border: 1.5px dashed var(--c); width: 12px; height: 9px; }
+.hears { font-size: .9rem; color: var(--soft); text-align: center; margin: 0; font-variant-numeric: tabular-nums; }
+.hears b { color: var(--ink); font-weight: 600; }
+
+/* buttons */
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: inherit; font-size: .9rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+button:hover { border-color: var(--mic); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
+button.primary { background: var(--mic); border-color: var(--mic); color: #fff; font-weight: 600; }
+button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+button:disabled { opacity: .5; cursor: default; }
+
+/* knobs */
+.knobs { display: grid; gap: 16px; }
+@media (min-width: 1080px) { .knobs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
+  .kcol { display: grid; gap: 16px; align-content: start; } }
+.kcol { display: grid; gap: 16px; align-content: start; }
+.kgroup { display: grid; gap: 10px; }
+.kgroup + .kgroup { border-top: 1px solid var(--line); padding-top: 14px; }
+.kgroup .hint { margin-top: -4px; }
+.knob { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 10px; align-items: baseline; }
+.knob label { font-weight: 500; font-size: .92rem; }
+.knob output { font-family: var(--mono); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.knob input[type=range] { grid-column: 1 / -1; width: 100%; margin: 2px 0 0; accent-color: var(--mic); }
+.noise { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0 10px; align-items: center; }
+.noise input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--noise); margin: 0; }
+.noise label { font-weight: 500; font-size: .92rem; }
+.noise label small { color: var(--soft); font-weight: 400; white-space: nowrap; }
+.noise output { font-family: var(--mono); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.noise input[type=range] { grid-column: 2 / -1; width: 100%; accent-color: var(--noise); margin: 0; }
+.noise.off label, .noise.off output { color: var(--soft); }
+.noise.off input[type=range] { opacity: .45; }
+.sub { grid-column: 2 / -1; }
+.sub .knob input[type=range] { accent-color: var(--noise); }
+.check { display: flex; gap: 8px; align-items: center; font-weight: 500; font-size: .92rem; }
+.check input { width: 17px; height: 17px; accent-color: var(--baby); margin: 0; }
+
+/* status */
+.status { display: flex; gap: 10px; align-items: center; font-size: .88rem; color: var(--soft); min-height: 1.6em; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--mic); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* viewer */
+.vhead { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.vtitle { display: grid; gap: 2px; min-width: 0; }
+.vtitle b { font-size: 1.05rem; }
+.vtitle span { color: var(--soft); font-size: .88rem; }
+.time { font-family: var(--mono); font-size: .85rem; color: var(--soft); font-variant-numeric: tabular-nums; }
+.viewer { position: relative; }
+#tl { width: 100%; height: auto; display: block; }
+#tl text { font-family: var(--sans); }
+.plots { position: relative; padding-left: 13.333%; padding-right: 2.222%; display: grid; gap: 6px; cursor: crosshair; }
+.plots canvas { width: 100%; display: block; border-radius: 4px; background: var(--spec0); }
+#wave { height: 84px; }
+#spec { height: 170px; }
+.plabel { position: absolute; left: 0; width: 12.5%; text-align: right; font-size: .78rem; color: var(--soft); line-height: 1.2; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); pointer-events: none; opacity: 0; }
+
+/* track lists */
+ol.tracks { list-style: none; margin: 0; padding: 0; }
+ol.tracks li { display: flex; gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+ol.tracks li:first-child, ol.tracks li.subrow, ol.tracks li.subrow + li { border-top: 0; }
+ol.tracks li.subrow { cursor: default; padding: 8px 6px 0; }
+ol.tracks li.subrow:hover { background: none; }
+ol.tracks.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+ol.tracks.grid2 li:nth-child(2) { border-top: 0; }
+ol.tracks.grid2 li { padding-block: 8px; }
+@media (max-width: 560px) { ol.tracks.grid2 { grid-template-columns: minmax(0, 1fr); } ol.tracks.grid2 li:nth-child(2) { border-top: 1px solid var(--line); } }
+ol.tracks li:hover { background: var(--bg); }
+ol.tracks li.sel { background: var(--bg); box-shadow: inset 3px 0 0 var(--mic); }
+.badge { flex: 0 0 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: .8rem; color: #fff; background: var(--c, var(--soft)); }
+.tt { flex: 1; min-width: 0; }
+.tt b { display: block; font-weight: 600; font-size: .95rem; }
+.tt span { color: var(--soft); font-size: .84rem; overflow-wrap: anywhere; }
+.score { flex: 0 0 72px; text-align: right; font-size: .82rem; color: var(--soft); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.score b { color: var(--ink); font-weight: 600; font-size: .95rem; }
+.score .py { display: block; font-family: var(--mono); font-size: .74rem; }
+.play { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+.play svg { width: 13px; height: 13px; }
+.lgroup { display: grid; gap: 6px; }
+.lgroup + .lgroup { margin-top: 2px; }
+details.lgroup { border-top: 1px solid var(--line); padding-top: 10px; }
+details.lgroup summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+details.lgroup summary::-webkit-details-marker { display: none; }
+details.lgroup summary::after { content: "+"; font-weight: 600; color: var(--soft); font-size: 1.1rem; line-height: 1; }
+details.lgroup[open] summary::after { content: "−"; }
+details.lgroup summary small { white-space: nowrap; margin-left: auto; color: var(--soft); font-size: .78rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.subhead { margin: 10px 0 2px; }
+.err { color: var(--bad); font-size: .84rem; margin: 0; }
+.tablewrap { overflow-x: auto; }
+#scoreTable { border-collapse: collapse; width: 100%; min-width: 560px; font-variant-numeric: tabular-nums; font-size: .9rem; }
+#scoreTable th, #scoreTable td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+#scoreTable th:first-child, #scoreTable td:first-child { text-align: left; white-space: normal; }
+#scoreTable thead th { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--soft); font-weight: 600; }
+#scoreTable thead tr:first-child th { border-bottom: 2px solid currentColor; padding-bottom: 6px; text-align: center; }
+#scoreTable thead tr:first-child th:first-child { border-bottom: 0; }
+#scoreTable col.c-proc { width: 28%; }
+#scoreTable .g { border-left: 1px solid var(--line); }
+#scoreTable .who-a { color: var(--a); } #scoreTable .who-b { color: var(--b); }
+#scoreTable td.py { color: var(--soft); font-family: var(--mono); font-size: .82rem; }
+#scoreTable tr.orig td { background: var(--bg); }
+#scoreTable td b { font-weight: 600; }
+.dl { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+.dl svg { width: 14px; height: 14px; }
+.check-box { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.check-box summary { cursor: pointer; font-weight: 600; font-size: .92rem; }
+.check-box[open] { gap: 10px; }
+#beepOut { font-family: var(--mono); font-size: .78rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+code { font-family: var(--mono); font-size: .82em; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+/* scene simulator v2 */
+select { font: inherit; font-size: .9rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; max-width: 100%; }
+select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 880px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cards { grid-template-columns: minmax(0, 1fr); } }
+.card { display: grid; gap: 4px; align-content: start; text-align: left; border-radius: 12px; padding: 12px 14px; background: var(--bg); min-width: 0; }
+.card b { font-size: 1rem; }
+.card span { color: var(--soft); font-size: .82rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card[aria-pressed="true"] { background: var(--panel); color: var(--ink); border: 2px solid var(--mic); box-shadow: inset 0 0 0 1px var(--mic); }
+.card[aria-pressed="true"] span { color: var(--soft); }
+.card:disabled { opacity: .5; }
+.callout { border-left: 5px solid var(--warn); background: var(--warnbg); color: var(--ink); border-radius: 8px; padding: 8px 12px; font-size: .88rem; margin: 0; }
+.callout b { color: var(--warn); }
+.callout ul { margin: 4px 0 0; padding-left: 18px; }
+#side { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; touch-action: none; }
+#side text { font-family: var(--sans); }
+.ent { cursor: grab; }
+.ent:active { cursor: grabbing; }
+.ent:focus { outline: none; }
+.ent:focus-visible .shape { stroke: var(--ink); stroke-width: 3.5; }
+.viewtitle { margin: 4px 0 0; text-align: center; }
+.legend .dia::before { border-radius: 0; transform: rotate(45deg); width: 9px; height: 9px; }
+.spk { border: 1px solid var(--line); border-left: 5px solid var(--c); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
+.spk:focus { outline: none; }
+.spk:focus-visible, .spk.flash { outline: 3px solid var(--c); outline-offset: 2px; }
+.spk-h { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.spk-h b { font-size: .95rem; flex: 1 1 auto; min-width: 7em; }
+.spk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+@media (max-width: 560px) { .spk-grid { grid-template-columns: minmax(0, 1fr); } }
+.spk .check input { accent-color: var(--c); }
+.spk-h label.vsel { display: flex; gap: 6px; align-items: center; font-size: .88rem; }
+.slist { display: grid; gap: 10px; }
+.field { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: .92rem; font-weight: 500; }
+.fieldrow { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.nsrc { display: grid; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
+.nsrc:first-child { border-top: 0; }
+.nsrc details summary { cursor: pointer; font-size: .84rem; color: var(--soft); }
+.nsrc details[open] { display: grid; gap: 6px; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 0 6px; border-radius: 999px; border: 1px solid var(--noise); color: var(--noise); margin-left: 4px; white-space: nowrap; }
+.tag.clamp { border-color: var(--bad); color: var(--bad); }
+.noise .nid { font-family: var(--mono); font-size: .75rem; color: var(--soft); margin-right: 4px; }
+button.small { padding: 4px 11px; font-size: .84rem; }
+button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
+#scoreTable td.sp, #scoreTable th.sp { text-align: left; white-space: normal; }
+#scoreTable td small { display: block; color: var(--soft); font-size: .76rem; }
+#scoreTable td .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 6px; }
+.sr { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+</style>
+
+<main>
+  <section class="intro" aria-labelledby="h-title">
+    <div class="intro-top">
+      <h1 id="h-title">Scene Simulator</h1>
+      <p class="lead">Hear a scene the way a robot with a ring of microphones on its head hears it. Pick a place (a home, a factory floor, a hospital room or a car), set the room, place up to five people anywhere around the robot, in 360 degrees and up or down, and add the noise that place brings with it. The robot's own fan, servos and electronics add noise right next to its microphones.</p>
+      <p><b>What this page is for:</b> to hear and measure how well the robot can pick out one person's voice when other people and the environment are making noise. It simulates the robot's microphones for the scene you set up, then runs the same processing as the Python scripts: direction finding (where each sound comes from) and beamforming (combining the microphones to focus on one speaker). Use it to try ideas quickly, such as a louder machine, a closer speaker, a more echoey room or more microphones, before running the full Python simulation.</p>
+    </div>
+    <h2>How to use it</h2>
+    <ol class="steps">
+      <li><b>Pick a scene</b><span>Home, Factory, Hospital or Automobile loads a room, people and noise sources. Custom (classic tests) has the four original test scenes.</span></li>
+      <li><b>Shape the room and the array</b><span>Under Scene setup, change the room size, echo and damping, and the number and layout of microphones.</span></li>
+      <li><b>Place people and noise</b><span>Add up to 5 speakers, set their voice, loudness and start time, and drag them in the top view. Switch noise sources on or off.</span></li>
+      <li><b>Listen to the raw mics</b><span>Press Play selected mics. Click mics on the head to choose which you hear. Use Stereo with headphones.</span></li>
+      <li><b>Compare the processing</b><span>Under Pick out each speaker, play Mic 1 alone, then the beamformers aimed at each target speaker.</span></li>
+      <li><b>Read the scores</b><span>The Scores table compares each method with the original (mic 1 alone). Click any row to see its waveform and spectrogram. Download everything as a zip.</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="h-scene">
+    <h2 id="h-scene">Choose a scene</h2>
+    <div class="cards" id="cards" role="group" aria-label="Scenes"></div>
+    <p class="hint" id="sceneNote" aria-live="polite"></p>
+    <div id="customBox" hidden>
+      <h3>Classic tests</h3>
+      <div class="row" id="presets" role="group" aria-label="Classic test scenes" style="margin-top: 6px"></div>
+      <p class="hint" id="presetNote" style="margin-top: 6px"></p>
+    </div>
+  </section>
+
+  <div class="top">
+    <section aria-labelledby="h-head">
+      <h2 id="h-head">What the robot hears</h2>
+      <p class="hint">Top view, robot facing right (0°, counter-clockwise). Drag a speaker (circle) or a noise source (diamond); click a noise source to switch it on or off; click a microphone to include it in the mix. With a marker focused: arrow keys turn it (Shift for fine steps), + and − change the distance, Page Up and Page Down change the elevation.</p>
+      <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
+      <div class="legend" id="legend"></div>
+      <p class="hears" id="hears"></p>
+      <div class="callout" id="warns" role="status" hidden></div>
+      <div class="row">
+        <button class="primary" id="playMics">Play selected mics</button>
+        <button id="allOn">All mics</button>
+        <button id="oneOn">Mic 1 only</button>
+        <button id="stereo" aria-pressed="false">Stereo for headphones</button>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+      <details class="check-box" id="soundCheck">
+        <summary>Can't hear anything? Run the sound check</summary>
+        <p class="hint">Each button plays a one-second beep a different way. Tell Claude which ones you hear and what the line under them says.</p>
+        <div class="row">
+          <button id="beep1">Beep 1: audio player</button>
+          <button id="beep2">Beep 2: embedded file</button>
+          <button id="beep3">Beep 3: Web Audio</button>
+        </div>
+        <p class="hint" id="beepOut" aria-live="polite"></p>
+      </details>
+    </section>
+
+    <section aria-labelledby="h-knobs">
+      <h2 id="h-knobs">Scene setup</h2>
+      <div class="knobs" id="knobs" style="grid-template-columns: minmax(0, 1fr)"></div>
+    </section>
+  </div>
+
+  <section aria-labelledby="h-scores">
+    <div class="vhead">
+      <h2 id="h-scores">Scores</h2>
+      <button id="dlAll" disabled>Download all audio + scores (.zip)</button>
+    </div>
+    <p class="hint">Each score is how much stronger a target voice is than everything else at that point, in dB. <b>The original</b> is Mic 1 alone: what one microphone hears with no processing. <b>Gain</b> is how much the processing improves on the original. +3 dB means the voice is about twice as strong relative to the noise, and +10 dB means ten times. Speakers switched to interferer are not scored.</p>
+    <div class="tablewrap"><table id="scoreTable"></table></div>
+    <p class="hint" id="scoreNote"></p>
+  </section>
+
+  <section aria-labelledby="h-view">
+    <div class="vhead">
+      <div class="vtitle"><b id="vName">Mic 1 alone</b><span id="vDesc"></span></div>
+      <div class="row"><span class="time" id="vTime">0.00 / 5.50 s</span><button class="primary" id="vPlay">Play</button></div>
+    </div>
+    <div class="viewer" id="viewer">
+      <svg id="tl" viewBox="0 0 900 236" role="img" aria-label="Timeline of who is talking and what the noise sources and the robot are doing"></svg>
+      <div class="plots" id="plots">
+        <span class="plabel" style="top: 30px">Waveform</span>
+        <canvas id="wave" aria-label="Waveform of the selected sound"></canvas>
+        <span class="plabel" style="top: 150px">Spectrogram<br>0–8 kHz</span>
+        <canvas id="spec" aria-label="Spectrogram of the selected sound"></canvas>
+        <div class="playhead" id="ph"></div>
+      </div>
+    </div>
+    <p class="hint">Click a row below to view it here. Click the waveform or spectrogram to play from that moment.</p>
+  </section>
+
+  <div class="lists">
+    <section aria-labelledby="h-pick">
+      <h2 id="h-pick">Pick out each speaker</h2>
+      <p class="hint">Higher dB means a cleaner target voice. The Scores table above explains the numbers.</p>
+      <ol class="tracks" id="beamList"></ol>
+      <h3 style="margin-top: 8px">Each sound alone, at mic 1</h3>
+      <p class="hint">Normalised so you can hear its character.</p>
+      <ol class="tracks grid2" id="soloList"></ol>
+    </section>
+    <section aria-labelledby="h-py">
+      <h2 id="h-py">Python recordings</h2>
+      <p class="hint">The WAV files made by <code>sim_conversation.py</code> and <code>sim_8mic_robot_noise.py</code> with pyroomacoustics for the classic test scenes (Custom). Open one to compare it with the page's version.</p>
+      <div id="pyList"></div>
+    </section>
+  </div>
+
+  <section class="about" aria-label="About the simulation">
+    <div><h3>How the page makes the sound</h3><p>The room is a box of the size you set, with early wall reflections plus a statistical late echo. Echo (RT60) sets how long the sound lingers; Damping makes the surfaces absorb more at high frequencies. The classic scenes use the same room (6 × 5 × 3 m), 8-mic ring, voices, robot noise recipes, levels and beamformers as the Python scripts and land within about 0.5 dB of Python in the baby and fan scenes.</p></div>
+    <div><h3>Scenario noise is synthesised</h3><p>No recorded ambience is used. The television, machines, monitors and engine are generated from simple models, so how realistic a scenario sounds is a qualitative judgement. Footsteps are approximate: the page's beamformer cancels the thump much less than Python does, so footsteps start switched off.</p></div>
+    <div><h3>Loudness levels</h3><p>Every level is loudness at mic 1 compared with Speaker 1's voice, as in the scripts' <code>LEVEL_DB</code> and <code>BABY_DB</code>. The 8-mic limit applies only downstream: the PDM Frontend-in-the-Loop pipeline needs exactly 8 microphones.</p></div>
+  </section>
+</main>
+
+<script id="engine">
+/*ENGINE*/
+</script>
+<script>
+// The page script lives in a function so none of its names can clash with the engine's or the scenarios' globals
+// (they share one global scope on the main thread). It only reads render, readWav, fft, normalizeParams,
+// SCENARIOS and SCENARIO_ORDER from there.
+(function () {
+"use strict";
+const VOICES = /*VOICES*/;
+const PY_FILES = /*PYFILES*/;
+const $ = id => document.getElementById(id);
+const clone = o => JSON.parse(JSON.stringify(o));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const RAD = Math.PI / 180;
+
+// ---------------------------------------------------------------- state
+// v1 defaults (the classic tests). The speaker list below is derived from these with the engine's normalizeParams.
+const DEF = { rt60: 0.5, radius: 5, roomDb: 25, manAng: 40, womanAng: 150, dist: 1.5,
+  babyOn: true, babyAng: 250, babyDist: 2.5, babyDb: -6,
+  fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8,
+  footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
+const ROBOT_KEYS = ["fanOn", "fanDb", "fanRpm", "neckOn", "neckDb", "shouldersOn", "shouldersDb", "footstepsOn", "footstepsDb", "clicksOn", "clicksDb", "humOn", "humDb"];
+const BASE = { schema: 2, scenario: "custom", roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
+  micCount: 8, arrayShape: "ring", ringGap: 8, radius: 5, arrayH: 1.5, arrayX: 3, arrayY: 2.5, speakers: [], noises: [] };
+for (const k of ROBOT_KEYS) BASE[k] = DEF[k];
+const ROBOT_OFF = { fanOn: false, neckOn: false, shouldersOn: false, footstepsOn: false, clicksOn: false, humOn: false };
+const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, low"], ["female_high", "female, high"], ["baby", "baby"]];
+const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
+const MIC_COUNTS = [4, 6, 8, 12, 16];
+const MAX_SPK = 5;
+// Python scores from sim_conversation.py for the matching scenes (speaker 1 = man, speaker 2 = woman)
+const PRESETS = [
+  { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still.",
+    py: { mic_s1: -1.0, mic_s2: -1.0, s1_mvdr: 4.7, s2_mvdr: 5.3 } },
+  { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum.",
+    py: { mic_s1: -1.8, mic_s2: -1.8, s1_mvdr: 4.5, s2_mvdr: 4.9, s1_learned: 4.9, s2_learned: 4.7 } },
+  { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off).", py: null },
+  { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor.", py: null },
+];
+const SCENE_LABELS = { home: "Home", factory: "Factory", hospital: "Hospital", automobile: "Automobile" };
+const CUSTOM_DESC = "The four original test scenes (baby, baby + fan, robot moving, quiet room) in the 6 × 5 × 3 m room, with the Python comparison.";
+let P = clone(BASE), sceneId = "custom", presetId = "robot", arrayAuto = true, RP = null;
+const deg = v => `${Math.round(v)}°`, mtr = v => `${(+v).toFixed(2)} m`, dB = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)} dB`;
+const ROBOT_NOISES = [
+  { k: "fan", label: "Cooling fan", where: "back of head", c: [-46, 0] },
+  { k: "neck", label: "Neck servo", where: "under the mics", c: [0, -20] },
+  { k: "shoulders", label: "Shoulder servos", where: "left shoulder", c: [0, -122] },
+  { k: "clicks", label: "Brake clicks", where: "joints", c: [0, 20] },
+  { k: "hum", label: "Electrical hum", where: "50 Hz", c: [40, -34] },
+  { k: "footsteps", label: "Footsteps", where: "approximate", c: [40, 34] },
+];
+const haveScenes = () => typeof SCENARIOS !== "undefined" && typeof SCENARIO_ORDER !== "undefined";
+const sceneOrder = () => (haveScenes() ? SCENARIO_ORDER : []);
+
+function centreArray(q) {
+  q.arrayX = +(q.roomL / 2).toFixed(2); q.arrayY = +(q.roomW / 2).toFixed(2);
+  q.arrayH = +Math.min(clamp(q.roomH / 2, 1.2, 1.5), q.roomH - 0.2).toFixed(2);
+}
+function fixP(q) {
+  if (!Array.isArray(q.speakers) || !q.speakers.length) q.speakers = [{ voice: "male", az: 40, dist: 1.5, start: 0.3 }, { voice: "female", az: 150, dist: 1.5, start: 2.6 }];
+  q.speakers = q.speakers.slice(0, MAX_SPK).map((s, i) => ({ voice: "male", az: 0, el: 0, dist: 1.5, db: 0, start: 0, target: true, ...s, id: "s" + (i + 1) }));
+  q.speakers[0].db = 0;
+  q.noises = (Array.isArray(q.noises) ? q.noises : []).map((n, i) => ({ label: n.gen || "noise", az: 0, el: 0, dist: 2, db: -20, on: true, path: null, ...n, id: n.id || "n" + (i + 1) }));
+  if (q.arrayX == null || q.arrayY == null || q.arrayH == null) { const t = { ...q }; centreArray(t); if (q.arrayX == null) q.arrayX = t.arrayX; if (q.arrayY == null) q.arrayY = t.arrayY; if (q.arrayH == null) q.arrayH = t.arrayH; }
+  return q;
+}
+function legacySpeakers(L) {
+  if (typeof normalizeParams === "function") {
+    try { const n = normalizeParams({ ...L }); if (n && Array.isArray(n.speakers) && n.speakers.length) return clone(n.speakers); } catch (_) { /* fall back below */ }
+  }
+  const out = [{ voice: "male", az: L.manAng, el: 0, dist: L.dist, db: 0, start: 0.3, target: true },
+    { voice: "female", az: L.womanAng, el: 0, dist: L.dist, db: 0, start: 2.6, target: true }];
+  if (L.babyOn) out.push({ voice: "baby", az: L.babyAng, el: Math.asin(-0.7 / L.babyDist) / RAD, dist: L.babyDist, db: L.babyDb, start: 0, target: false });
+  return out;
+}
+const baseCache = {};
+function presetP(pid) {
+  const key = "c:" + pid;
+  if (!baseCache[key]) {
+    const pr = PRESETS.find(x => x.id === pid), L = { ...DEF, ...pr.set }, q = clone(BASE);
+    for (const k of ROBOT_KEYS) q[k] = L[k];
+    q.rt60 = L.rt60; q.radius = L.radius; q.roomDb = L.roomDb; q.speakers = legacySpeakers(L); q.noises = []; q.scenario = "custom";
+    baseCache[key] = fixP(q);
+  }
+  return clone(baseCache[key]);
+}
+function scenarioP(id) {
+  const key = "s:" + id;
+  if (!baseCache[key]) {
+    const q = { ...clone(BASE), ...clone((SCENARIOS[id] && SCENARIOS[id].params) || {}) };
+    q.schema = 2; q.scenario = id;
+    baseCache[key] = fixP(q);
+  }
+  return clone(baseCache[key]);
+}
+const canon = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map(x => [x, v[x]])) : v);
+function baseFor(q) { return q.scenario === "custom" ? presetP(presetId) : scenarioP(q.scenario); }
+function presetMatches(q = P) { try { return canon(q) === canon(baseFor(q)); } catch (_) { return false; } }
+const spkName = s => `Speaker ${s.id.slice(1)} (${voiceLabel(s.voice)})`;
+const pyScores = q => { const pr = q.scenario === "custom" ? PRESETS.find(x => x.id === presetId) : null; return pr && pr.py && presetMatches(q) ? pr.py : {}; };
+
+// ---------------------------------------------------------------- controls
+const regs = { st: [], spk: [], noi: [], rob: [] };
+function mkRange(parent, reg, o) {
+  const d = document.createElement("div"); d.className = "knob";
+  d.innerHTML = `<label for="${o.id}">${o.label}</label><output for="${o.id}"></output><input type="range" id="${o.id}" step="${o.step}">`;
+  parent.appendChild(d);
+  const inp = d.querySelector("input"), out = d.querySelector("output");
+  inp.addEventListener("input", () => { o.set(+inp.value); if (o.after) o.after(); changed(); });
+  reg.push(() => {
+    const r = o.range ? o.range() : [o.min, o.max];
+    inp.min = r[0]; inp.max = r[1];
+    const v = o.get(); inp.value = v; out.textContent = o.fmt(v);
+    if (o.dis) { const x = !!o.dis(); inp.disabled = x; d.style.opacity = x ? 0.5 : ""; }
+  });
+  return d;
+}
+function mkSelect(parent, reg, o) {
+  const l = document.createElement("label"); l.className = "field";
+  l.innerHTML = `${o.label} <select id="${o.id}">${o.options.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>`;
+  parent.appendChild(l);
+  const sel = l.querySelector("select");
+  sel.addEventListener("change", () => { o.set(sel.value); if (o.after) o.after(); changed(); });
+  reg.push(() => { sel.value = String(o.get()); });
+  return l;
+}
+function mkCheck(parent, reg, o) {
+  const l = document.createElement("label"); l.className = "check";
+  l.innerHTML = `<input type="checkbox" id="${o.id}"> <span>${o.label}</span>`;
+  parent.appendChild(l);
+  const cb = l.querySelector("input");
+  cb.addEventListener("change", () => { o.set(cb.checked); if (o.after) o.after(); changed(); });
+  reg.push(() => { cb.checked = !!o.get(); });
+  return l;
+}
+function group(title, hint, id) {
+  const box = document.createElement("div"); box.className = "kgroup"; if (id) box.id = id;
+  const h = document.createElement("h3"); h.textContent = title; box.appendChild(h);
+  if (hint) { const p = document.createElement("p"); p.className = "hint"; p.textContent = hint; box.appendChild(p); }
+  $("knobs").appendChild(box);
+  return box;
+}
+function onRoomChange() {
+  if (arrayAuto) centreArray(P);
+  else { P.arrayX = clamp(P.arrayX, 0.2, P.roomL - 0.2); P.arrayY = clamp(P.arrayY, 0.2, P.roomW - 0.2); P.arrayH = clamp(P.arrayH, 0.2, P.roomH - 0.2); }
+}
+function buildStatic() {
+  const st = regs.st;
+  let g = group("Room", "A box. Echo is how long sound lingers; damping is how absorbent the surfaces are at high frequencies and for early reflections.");
+  const num = (k, o) => mkRange(g, st, { id: "k_" + k, get: () => P[k], set: v => { P[k] = v; }, ...o });
+  num("roomL", { label: "Length", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
+  num("roomW", { label: "Width", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
+  num("roomH", { label: "Height", min: 1, max: 8, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
+  num("rt60", { label: "Echo time (RT60)", min: 0.05, max: 1.5, step: 0.05, fmt: v => v.toFixed(2) + " s" });
+  num("damping", { label: "Damping", min: 0, max: 1, step: 0.05, fmt: v => v.toFixed(2) });
+  num("roomDb", { label: "Noise floor (below Speaker 1)", min: 5, max: 40, step: 1, fmt: v => `−${v} dB` });
+
+  g = group("Microphones", "The array sits at the head. Every setting here re-renders the scene.");
+  const row = document.createElement("div"); row.className = "fieldrow"; g.appendChild(row);
+  mkSelect(row, st, { id: "k_micCount", label: "Number of mics", options: MIC_COUNTS.map(n => [n, n]), get: () => P.micCount, set: v => { P.micCount = +v; }, after: syncMicOn });
+  mkSelect(row, st, { id: "k_arrayShape", label: "Layout", options: [["ring", "Ring"], ["dual_ring", "Dual ring"]], get: () => P.arrayShape, set: v => { P.arrayShape = v; } });
+  const warn = document.createElement("p"); warn.className = "callout"; warn.id = "micWarn"; warn.setAttribute("role", "status"); g.appendChild(warn);
+  num("radius", { label: "Ring radius", min: 3, max: 10, step: 0.5, fmt: v => v.toFixed(1) + " cm" });
+  num("ringGap", { label: "Gap between the two rings", min: 2, max: 20, step: 1, fmt: v => v.toFixed(0) + " cm", dis: () => P.arrayShape !== "dual_ring" });
+  mkCheck(g, st, { id: "k_arrayAuto", label: "Put the array at the room centre", get: () => arrayAuto, set: v => { arrayAuto = v; }, after: () => { if (arrayAuto) centreArray(P); } });
+  const free = () => { arrayAuto = false; };
+  num("arrayH", { label: "Array height above the floor", range: () => [0.2, Math.max(0.3, P.roomH - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
+  num("arrayX", { label: "Array position along the length", range: () => [0.2, Math.max(0.3, P.roomL - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
+  num("arrayY", { label: "Array position across the width", range: () => [0.2, Math.max(0.3, P.roomW - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
+
+  g = group("Speakers", `Up to ${MAX_SPK}. Loudness is at mic 1 relative to Speaker 1. A target is beamformed and scored; an interferer only adds sound.`, "gSpk");
+  const sl = document.createElement("div"); sl.className = "slist"; sl.id = "spkList"; g.appendChild(sl);
+  const r2 = document.createElement("div"); r2.className = "row"; g.appendChild(r2);
+  const add = document.createElement("button"); add.id = "addSpk"; add.textContent = "Add speaker"; r2.appendChild(add);
+  add.addEventListener("click", addSpeaker);
+
+  group("Noise sources", "", "gNoi");
+  group("Robot's own noise", "Loudness at mic 1 compared with Speaker 1's voice. Available in every scene.", "gRob");
+}
+function syncMicOn() { if (micOn.length !== P.micCount) micOn = new Array(P.micCount).fill(true); }
+
+function addSpeaker() {
+  if (P.speakers.length >= MAX_SPK) { setStatus(false, `Up to ${MAX_SPK} speakers. Remove one to add another.`); return; }
+  const i = P.speakers.length;
+  P.speakers.push({ id: "s" + (i + 1), voice: ["male", "female", "male_low", "female_high", "baby"][i % 5], az: [40, 150, 250, 330, 95][i], el: 0, dist: 1.5, db: 0,
+    start: [0.3, 2.6, 1.0, 3.4, 0.6][i], target: true });
+  buildSpeakers(); changed(true);
+}
+function removeSpeaker(id) {
+  if (P.speakers.length <= 1) return;
+  P.speakers = P.speakers.filter(s => s.id !== id).map((s, i) => ({ ...s, id: "s" + (i + 1) }));
+  P.speakers[0].db = 0;
+  buildSpeakers(); changed(true);
+  const b = $("addSpk"); if (b) b.focus();
+}
+function buildSpeakers() {
+  const root = $("spkList"); root.textContent = ""; regs.spk.length = 0;
+  P.speakers.forEach((s, i) => {
+    const q = () => P.speakers.find(x => x.id === s.id) || s, sid = s.id;
+    const card = document.createElement("div"); card.className = "spk"; card.id = "spk_" + sid; card.tabIndex = -1;
+    card.style.setProperty("--c", `var(--s${i + 1})`);
+    card.setAttribute("role", "group"); card.setAttribute("aria-labelledby", "spkt_" + sid);
+    const h = document.createElement("div"); h.className = "spk-h"; card.appendChild(h);
+    const title = document.createElement("b"); title.id = "spkt_" + sid; h.appendChild(title);
+    regs.spk.push(() => { title.textContent = spkName(q()) + (q().target ? "" : " · interferer"); });
+    mkSelect(h, regs.spk, { id: `k_${sid}_voice`, label: "Voice", options: VOICE_LIST, get: () => q().voice, set: v => { q().voice = v; } });
+    mkCheck(h, regs.spk, { id: `k_${sid}_target`, label: "Target", get: () => q().target, set: v => { q().target = v; } });
+    const rm = document.createElement("button"); rm.className = "small"; rm.id = `rm_${sid}`; rm.textContent = "Remove";
+    rm.setAttribute("aria-label", `Remove speaker ${i + 1}`); rm.disabled = P.speakers.length <= 1; rm.addEventListener("click", () => removeSpeaker(sid)); h.appendChild(rm);
+    const grid = document.createElement("div"); grid.className = "spk-grid"; card.appendChild(grid);
+    const r = (k, o) => mkRange(grid, regs.spk, { id: `k_${sid}_${k}`, get: () => q()[k], set: v => { q()[k] = v; }, ...o });
+    r("az", { label: "Azimuth", min: 0, max: 359, step: 1, fmt: deg });
+    r("el", { label: "Elevation", min: -60, max: 90, step: 1, fmt: deg });
+    r("dist", { label: "Distance", min: 0.3, max: 8, step: 0.05, fmt: mtr });
+    r("db", { label: "Loudness", min: -30, max: 10, step: 1, fmt: v => i === 0 ? "0 dB (reference)" : dB(v), dis: () => i === 0 });
+    r("start", { label: "Starts at", min: 0, max: 4.5, step: 0.1, fmt: v => v.toFixed(1) + " s" });
+    root.appendChild(card);
+  });
+}
+function buildNoises() {
+  const box = $("gNoi"), old = box.querySelector(".slist"); if (old) old.remove();
+  const oldp = box.querySelector(".hint"); if (oldp) oldp.remove();
+  regs.noi.length = 0;
+  const p = document.createElement("p"); p.className = "hint";
+  p.textContent = P.noises.length ? "Ambient sources of this scene. Loudness is at mic 1 compared with Speaker 1. Moving sources travel along a path during the 5.5 s." : "The Custom scenes have no ambient noise sources, only the robot's own noise below. Pick Home, Factory, Hospital or Automobile for a noisy environment.";
+  box.appendChild(p);
+  const list = document.createElement("div"); list.className = "slist"; list.id = "noiList"; box.appendChild(list);
+  P.noises.forEach((n0, i) => {
+    const nid = n0.id, q = () => P.noises.find(x => x.id === nid) || n0;
+    const d = document.createElement("div"); d.className = "nsrc"; d.id = "nsrc_" + nid;
+    const top = document.createElement("div"); top.className = "noise"; d.appendChild(top);
+    top.innerHTML = `<input type="checkbox" id="k_${nid}_on" aria-label="${esc(n0.label)} on"><label for="k_${nid}_db"><span class="nid">N${i + 1}</span>${esc(n0.label)}<span class="tag" hidden>moving</span><span class="tag clamp" hidden>moved inside the room</span></label><output></output><input type="range" id="k_${nid}_db" min="-40" max="10" step="1">`;
+    const cb = top.querySelector("input[type=checkbox]"), rg = top.querySelector("input[type=range]"), out = top.querySelector("output");
+    const tag = top.querySelector(".tag"), clampTag = top.querySelector(".tag.clamp");
+    cb.addEventListener("change", () => { q().on = cb.checked; changed(); });
+    rg.addEventListener("input", () => { q().db = +rg.value; changed(); });
+    regs.noi.push(() => {
+      cb.checked = !!q().on; rg.value = q().db; out.textContent = dB(q().db); top.classList.toggle("off", !q().on);
+      const pa = q().path; tag.hidden = !pa; if (pa) tag.textContent = `moving to ${Math.round(pa.az1)}°`;
+      const src = RES && RES.sources && RES.sources.find(x => x.id === nid); clampTag.hidden = !(src && src.clamped);
+    });
+    const det = document.createElement("details"); det.innerHTML = "<summary>Position</summary>"; d.appendChild(det);
+    const r = (k, o) => mkRange(det, regs.noi, { id: `k_${nid}_${k}`, get: () => q()[k], set: v => { q()[k] = v; }, ...o });
+    r("az", { label: "Azimuth", min: 0, max: 359, step: 1, fmt: deg });
+    r("el", { label: "Elevation", min: -60, max: 90, step: 1, fmt: deg });
+    r("dist", { label: "Distance", min: 0.3, max: 20, step: 0.1, fmt: mtr });
+    list.appendChild(d);
+  });
+}
+function buildRobot() {
+  const box = $("gRob"); regs.rob.length = 0;
+  for (const n of ROBOT_NOISES) {
+    const d = document.createElement("div"); d.className = "noise"; d.id = "row_" + n.k;
+    d.innerHTML = `<input type="checkbox" id="k_${n.k}On" aria-label="${n.label} on"><label for="k_${n.k}Db">${n.label} <small>${n.where}</small></label><output></output><input type="range" id="k_${n.k}Db" min="-36" max="6" step="1">`;
+    box.appendChild(d);
+    const cb = d.querySelector("input[type=checkbox]"), rg = d.querySelector("input[type=range]"), out = d.querySelector("output");
+    cb.addEventListener("change", () => { P[n.k + "On"] = cb.checked; changed(); });
+    rg.addEventListener("input", () => { P[n.k + "Db"] = +rg.value; changed(); });
+    regs.rob.push(() => { cb.checked = !!P[n.k + "On"]; rg.value = P[n.k + "Db"]; out.textContent = dB(P[n.k + "Db"]); d.classList.toggle("off", !P[n.k + "On"]); });
+    if (n.k === "fan") {
+      const s = document.createElement("div"); s.className = "sub"; d.appendChild(s);
+      mkRange(s, regs.rob, { id: "k_fanRpm", label: "Top speed", min: 2400, max: 6000, step: 100, fmt: v => v + " rpm", get: () => P.fanRpm, set: v => { P.fanRpm = v; } });
+    }
+  }
+}
+function buildCards() {
+  const root = $("cards"); root.textContent = "";
+  const items = sceneOrder().map(id => [id, SCENARIOS[id]]).concat([["custom", { label: "Custom (classic tests)", desc: CUSTOM_DESC }]]);
+  for (const id of Object.keys(SCENE_LABELS)) if (!sceneOrder().includes(id)) items.splice(items.length - 1, 0, [id, null]);
+  for (const [id, sc] of items) {
+    const b = document.createElement("button"); b.className = "card"; b.dataset.id = id; b.id = "card_" + id;
+    b.innerHTML = `<b>${esc((sc && sc.label) || SCENE_LABELS[id] || id)}</b><span>${esc((sc && sc.desc) || "Not loaded in this build.")}</span>`;
+    b.disabled = !sc;
+    b.addEventListener("click", () => loadScene(id));
+    root.appendChild(b);
+  }
+  for (const pr of PRESETS) {
+    const b = document.createElement("button"); b.textContent = pr.label; b.dataset.id = pr.id;
+    b.addEventListener("click", () => loadScene("custom", pr.id));
+    $("presets").appendChild(b);
+  }
+}
+function loadScene(id, pid) {
+  sceneId = id;
+  if (id === "custom") { if (pid) presetId = pid; P = presetP(presetId); }
+  else P = scenarioP(id);
+  const t = clone(P); centreArray(t);
+  arrayAuto = Math.abs(t.arrayX - P.arrayX) < 0.02 && Math.abs(t.arrayY - P.arrayY) < 0.02 && Math.abs(t.arrayH - P.arrayH) < 0.02;
+  micOn = new Array(P.micCount).fill(true);
+  buildSpeakers(); buildNoises(); changed(true);
+}
+function syncKnobs() {
+  for (const k in regs) for (const f of regs[k]) f();
+  for (const b of $("cards").children) b.setAttribute("aria-pressed", b.dataset.id === sceneId);
+  $("customBox").hidden = sceneId !== "custom";
+  const match = presetMatches();
+  for (const b of $("presets").children) b.setAttribute("aria-pressed", b.dataset.id === presetId && match);
+  const pr = PRESETS.find(x => x.id === presetId);
+  $("presetNote").textContent = match ? pr.desc : `Changed from “${pr.label}”.`;
+  const sc = sceneId !== "custom" && haveScenes() ? SCENARIOS[sceneId] : null;
+  $("sceneNote").textContent = sceneId === "custom" ? CUSTOM_DESC : ((sc && sc.desc) || "") + (match ? "" : " (Modified from the scenario defaults.)");
+  const w = $("micWarn");
+  w.hidden = P.micCount === 8;
+  w.innerHTML = P.micCount === 8 ? "" : `<b>${P.micCount} microphones.</b> The PDM Frontend-in-the-Loop pipeline (hil/make_pdm.py, exp22) needs exactly 8 microphones (4 data lines × 2). A zip with ${P.micCount} mics will be rejected there with a clear message. Use 8 for that pipeline.`;
+  const add = $("addSpk");
+  if (add) { add.setAttribute("aria-disabled", P.speakers.length >= MAX_SPK); add.textContent = P.speakers.length >= MAX_SPK ? `Add speaker (maximum ${MAX_SPK})` : "Add speaker"; }
+  const rmb = P.speakers.length <= 1; P.speakers.forEach(s => { const b = $("rm_" + s.id); if (b) b.disabled = rmb; });
+  $("allOn").textContent = `All ${P.micCount} mics`;
+}
+
+// ---------------------------------------------------------------- top view
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const VSTEPS = [3, 4, 6, 8, 12, 20];
+const pt = (a, r) => [r * Math.cos(a * RAD), -r * Math.sin(a * RAD)];
+let micOn = new Array(8).fill(true), drag = null, srpPeaks = [], vmax = 3;
+const entList = () => P.speakers.map((s, i) => ({ kind: "spk", o: s, i, color: `var(--s${i + 1})`, label: spkName(s), short: String(i + 1) }))
+  .concat(P.noises.map((n, i) => ({ kind: "noi", o: n, i, color: "var(--noise)", label: n.label || n.id, short: "N" + (i + 1) })));
+const hDist = o => o.dist * Math.cos(o.el * RAD);
+function autoVmax() { const m = Math.max(1, ...entList().map(e => hDist(e.o))); return VSTEPS.find(v => v >= m) || 20; }
+const Rm = d => 96 + 126 * d / vmax;
+function micAngles(n, shape) {
+  if (shape === "dual_ring") { const h = n / 2; return Array.from({ length: n }, (_, i) => i < h ? i * 360 / h : (i - h) * 360 / h + 180 / h); }
+  return Array.from({ length: n }, (_, i) => i * 360 / n);
+}
+function drawHead() {
+  const svg = $("head"), act = document.activeElement, fid = act && act.getAttribute && act.getAttribute("data-fid");
+  if (!drag) vmax = autoVmax();
+  svg.textContent = "";
+  const step = vmax <= 4 ? 1 : vmax <= 8 ? 2 : vmax <= 12 ? 4 : 5;
+  for (let d = step; d <= vmax; d += step) {
+    el("circle", { cx: 0, cy: 0, r: Rm(d), fill: "none", stroke: "var(--line)", "stroke-dasharray": "3 6" }, svg);
+    const [lx, ly] = pt(-62, Rm(d) + 6); el("text", { x: lx, y: ly + 4, "font-size": 11, fill: "var(--soft)" }, svg, d + " m");
+  }
+  for (const [a, anchor] of [[0, "end"], [90, "middle"], [180, "start"], [270, "middle"]]) { const [x, y] = pt(a, 234); el("text", { x, y: y + (a === 90 ? 10 : a === 270 ? 0 : -10), "text-anchor": anchor, "font-size": 11, fill: "var(--soft)" }, svg, a + "°"); }
+  // room outline seen from the array (polar-stretched like the rings)
+  const cp = el("clipPath", { id: "clipTop" }, svg); el("circle", { cx: 0, cy: 0, r: 232 }, cp);
+  const x0 = -P.arrayX, x1 = P.roomL - P.arrayX, y0 = -P.arrayY, y1 = P.roomW - P.arrayY, pts = [];
+  const edge = (ax, ay, bx, by) => { for (let k = 0; k < 24; k++) { const x = ax + (bx - ax) * k / 24, y = ay + (by - ay) * k / 24; const [px, py] = pt(Math.atan2(y, x) / RAD, Rm(Math.hypot(x, y))); pts.push(px.toFixed(1) + "," + py.toFixed(1)); } };
+  edge(x0, y0, x1, y0); edge(x1, y0, x1, y1); edge(x1, y1, x0, y1); edge(x0, y1, x0, y0);
+  const g0 = el("g", { "clip-path": "url(#clipTop)" }, svg);
+  el("polygon", { points: pts.join(" "), fill: "none", stroke: "var(--soft)", "stroke-width": 1.2, "stroke-dasharray": "6 4", opacity: 0.7 }, g0);
+  for (const p of srpPeaks) {
+    const a = p.az, [x1_, y1_] = pt(a, 80), [x2, y2] = pt(a, 222);
+    el("line", { x1: x1_, y1: y1_, x2, y2, stroke: "var(--srp)", "stroke-width": 1.2, "stroke-dasharray": "2 4", opacity: 0.8 }, svg);
+    const t = a * RAD, [tx, ty] = pt(a, 224), px = -Math.sin(t), py = -Math.cos(t);
+    el("path", { d: `M${tx - 9 * Math.cos(t) + 6 * px} ${ty + 9 * Math.sin(t) + 6 * py} L${tx} ${ty} L${tx - 9 * Math.cos(t) - 6 * px} ${ty + 9 * Math.sin(t) - 6 * py} Z`, fill: "var(--srp)" }, svg);
+  }
+  el("circle", { cx: 0, cy: 0, r: 70, fill: "var(--head)", stroke: "var(--line)", "stroke-width": 1.5 }, svg);
+  el("path", { d: "M68 -12 L88 0 L68 12", fill: "var(--head)", stroke: "var(--line)", "stroke-width": 1.5 }, svg);
+  el("text", { x: 0, y: 56, "text-anchor": "middle", "font-size": 10, fill: "var(--soft)" }, svg, "robot head");
+  // robot noise chips
+  for (const n of ROBOT_NOISES) {
+    const on = P[n.k + "On"], [x, y] = n.c;
+    const g = el("g", { class: "chip", tabindex: 0, role: "switch", "aria-checked": on, "aria-label": n.label, "data-fid": "chip:" + n.k }, svg);
+    el("rect", { x: x - 22, y: y - 10, width: 44, height: 20, rx: 5, fill: on ? "var(--noise)" : "var(--panel)", "fill-opacity": on ? 0.16 : 1, stroke: on ? "var(--noise)" : "var(--micoff)", "stroke-width": 1.5, "stroke-dasharray": on ? "none" : "3 3" }, g);
+    el("text", { x, y: y + 4, "text-anchor": "middle", "font-size": 10.5, "font-weight": 600, fill: on ? "var(--noise)" : "var(--soft)", "pointer-events": "none" }, g,
+      { fan: "fan", neck: "neck", shoulders: "arm", clicks: "brakes", hum: "hum", footsteps: "feet" }[n.k]);
+    const toggle = () => { P[n.k + "On"] = !P[n.k + "On"]; changed(); };
+    g.addEventListener("click", toggle);
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+  }
+  // microphones on the head rim
+  const nm = P.micCount, ang = micAngles(nm, P.arrayShape), mr = nm > 8 ? 10 : 12;
+  for (let i = 0; i < nm; i++) {
+    const [x, y] = pt(ang[i], 84), upper = P.arrayShape === "dual_ring" && i >= nm / 2, on = micOn[i] !== false;
+    const g = el("g", { class: "mic", tabindex: 0, role: "switch", "aria-checked": on, "aria-label": `Microphone ${i + 1}`, "data-fid": "mic:" + i }, svg);
+    el("circle", { cx: x, cy: y, r: mr, fill: upper ? "var(--panel)" : on ? "var(--mic)" : "var(--micoff)", stroke: upper ? (on ? "var(--mic)" : "var(--micoff)") : "none", "stroke-width": 2.5 }, g);
+    el("text", { x, y: y + 4, "text-anchor": "middle", "font-size": nm > 8 ? 9 : 11, "font-weight": 600, fill: upper ? "var(--ink)" : "#fff", "pointer-events": "none" }, g, i + 1);
+    const t = () => { micOn[i] = !on; drawHead(); updateMicMix(); };
+    g.addEventListener("click", t);
+    g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); t(); } });
+  }
+  // noise sources (diamonds), then speakers (circles) on top
+  const srcOf = id => RES && RES.sources && RES.sources.find(x => x.id === id);
+  const ents = entList();
+  for (const kind of ["noi", "spk"]) for (const e of ents) {
+    if (e.kind !== kind) continue;
+    const o = e.o, on = kind === "spk" || o.on, [x, y] = pt(o.az, Rm(hDist(o))), [lx, ly] = pt(o.az, 96);
+    el("line", { x1: lx, y1: ly, x2: x, y2: y, stroke: e.color, "stroke-width": 1.5, "stroke-dasharray": "2 5", opacity: on ? 1 : 0.4 }, svg);
+    if (kind === "noi" && o.path) { const [ex, ey] = pt(o.path.az1, Rm(Math.max(0.3, (o.path.dist1 || o.dist) * Math.cos((o.path.el1 || 0) * RAD)))); el("line", { x1: x, y1: y, x2: ex, y2: ey, stroke: e.color, "stroke-width": 1.5, "stroke-dasharray": "5 3", opacity: on ? 0.8 : 0.3 }, svg); el("circle", { cx: ex, cy: ey, r: 4, fill: "none", stroke: e.color }, svg); }
+    const rs = srcOf(o.id);
+    if (rs && rs.clamped) { const [gx, gy] = pt(rs.az, Rm(rs.dist * Math.cos(rs.el * RAD))); el("circle", { cx: gx, cy: gy, r: 6, fill: "none", stroke: "var(--bad)", "stroke-width": 2, "stroke-dasharray": "2 2" }, svg); }
+    const g = el("g", { class: "ent", tabindex: 0, role: "slider", "data-fid": "top:" + o.id, "aria-label": `${e.label}, azimuth ${Math.round(o.az)} degrees, elevation ${Math.round(o.el)} degrees, distance ${(+o.dist).toFixed(2)} metres${kind === "noi" ? (o.on ? ", on" : ", off") : ""}${rs && rs.clamped ? ", moved inside the room" : ""}`,
+      "aria-valuemin": 0, "aria-valuemax": 359, "aria-valuenow": Math.round(o.az) }, svg);
+    if (kind === "spk") {
+      el("circle", { class: "shape", cx: x, cy: y, r: 17, fill: o.target ? e.color : "var(--panel)", "fill-opacity": o.target ? 1 : 0.9, stroke: e.color, "stroke-width": 3, "stroke-dasharray": o.target ? "none" : "4 3" }, g);
+      el("text", { x, y: y + 5, "text-anchor": "middle", "font-size": 14, "font-weight": 700, fill: o.target ? "#fff" : e.color, "pointer-events": "none" }, g, e.short);
+    } else {
+      el("path", { class: "shape", d: `M${x} ${y - 17} L${x + 17} ${y} L${x} ${y + 17} L${x - 17} ${y} Z`, fill: on ? e.color : "var(--panel)", "fill-opacity": on ? 0.22 : 1, stroke: on ? e.color : "var(--micoff)", "stroke-width": 2, "stroke-dasharray": on ? "none" : "3 3" }, g);
+      el("text", { x, y: y + 4, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: on ? e.color : "var(--soft)", "pointer-events": "none" }, g, e.short);
+    }
+    if (rs && rs.clamped) { el("circle", { cx: x + 14, cy: y - 14, r: 7, fill: "var(--bad)" }, g); el("text", { x: x + 14, y: y - 10, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "#fff", "pointer-events": "none" }, g, "!"); }
+    el("title", {}, g, e.label);
+    g.addEventListener("pointerdown", ev => { drag = { kind, id: o.id, vmax, x0: ev.clientX, y0: ev.clientY, moved: false }; svg.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+    g.addEventListener("keydown", ev => entKey(ev, kind, o.id));
+  }
+  if (fid) { const n = document.querySelector(`[data-fid="${fid}"]`); if (n && n !== document.activeElement) n.focus({ preventScroll: true }); }
+}
+function findEnt(d) { return (d.kind === "spk" ? P.speakers : P.noises).find(x => x.id === d.id); }
+function entKey(e, kind, id) {
+  const o = findEnt({ kind, id }); if (!o) return;
+  const big = e.shiftKey ? 1 : 5, dmax = kind === "spk" ? 8 : 20;
+  let used = true;
+  if (e.key === "ArrowLeft" || e.key === "ArrowUp") o.az = (Math.round(o.az) + big) % 360;
+  else if (e.key === "ArrowRight" || e.key === "ArrowDown") o.az = (Math.round(o.az) + 360 - big) % 360;
+  else if (e.key === "+" || e.key === "=") o.dist = clamp(+(o.dist + 0.1).toFixed(2), 0.3, dmax);
+  else if (e.key === "-" || e.key === "_") o.dist = clamp(+(o.dist - 0.1).toFixed(2), 0.3, dmax);
+  else if (e.key === "PageUp") o.el = clamp(Math.round(o.el) + big, -60, 90);
+  else if (e.key === "PageDown") o.el = clamp(Math.round(o.el) - big, -60, 90);
+  else if (kind === "noi" && (e.key === "Enter" || e.key === " ")) o.on = !o.on;
+  else if (kind === "spk" && e.key === "Enter") { const c = $("spk_" + id); if (c) { c.focus(); c.scrollIntoView({ block: "nearest" }); } }
+  else used = false;
+  if (used) { e.preventDefault(); changed(); }
+}
+function svgPoint(e) { const svg = $("head"), p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); }
+$("head").addEventListener("pointermove", e => {
+  if (!drag) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 4) return;
+  drag.moved = true;
+  const o = findEnt(drag); if (!o) return;
+  const q = svgPoint(e), a = Math.round(((Math.atan2(-q.y, q.x) / RAD) + 360) % 360) % 360;
+  const dh = Math.max(0, (Math.hypot(q.x, q.y) - 96) / 126 * drag.vmax), c = Math.max(0.2, Math.cos(o.el * RAD));
+  o.az = a; o.dist = clamp(Math.round(dh / c * 20) / 20, 0.3, drag.kind === "spk" ? 8 : 20);
+  syncKnobs(); drawHead();
+});
+const endDrag = () => {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.moved) changed();
+  else { const o = findEnt(d); if (o && d.kind === "noi") { o.on = !o.on; changed(); } else if (d.kind === "spk") { const c = $("spk_" + d.id); if (c) { c.focus(); c.scrollIntoView({ block: "nearest" }); } } }
+};
+$("head").addEventListener("pointerup", endDrag);
+$("head").addEventListener("pointercancel", endDrag);
+function drawLegend() {
+  $("legend").innerHTML = P.speakers.map((s, i) => `<span style="--c: var(--s${i + 1})">${esc(spkName(s))}${s.target ? "" : " (interferer)"}</span>`).join("")
+    + (P.noises.length ? '<span class="dia" style="--c: var(--noise)">Ambient noise (N1…)</span>' : "")
+    + '<span class="box" style="--c: var(--noise)">Robot noise</span><span class="tri" style="--c: var(--srp)">Where the robot thinks sound comes from</span><span class="box" style="--c: var(--soft)">Room outline</span>';
+}
+function drawWarns() {
+  const w = $("warns"), list = (RES && RES.warnings) || [];
+  w.hidden = !list.length;
+  w.innerHTML = list.length ? `<b>Heads up</b><ul>${list.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";
+}
+
+// ---------------------------------------------------------------- rendering (worker)
+let worker = null, reqId = 0, latest = 0, busy = false, queued = false, timer = null, RES = null, reqParams = null;
+const voiceBufs = {};
+for (const k in VOICES) { const b = atob(VOICES[k]), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); voiceBufs[k] = u.buffer; }
+try {
+  worker = new Worker(URL.createObjectURL(new Blob([$("engine").textContent], { type: "text/javascript" })));
+  worker.onmessage = e => onWorker(e.data);
+  worker.onerror = () => { worker = null; };
+} catch (_) { worker = null; }
+let sentVoices = false;
+function startRender() {
+  if (busy) { queued = true; return; }
+  busy = true; queued = false;
+  const id = ++reqId; latest = id;
+  setStatus(true, `Rendering the ${P.micCount} microphones…`);
+  const params = clone(P); reqParams = params;
+  if (worker) {
+    const msg = { id, params };
+    if (!sentVoices) { msg.voiceBufs = { male: voiceBufs.male.slice(0), female: voiceBufs.female.slice(0), baby: voiceBufs.baby.slice(0) }; sentVoices = true; }
+    worker.postMessage(msg);
+  } else {
+    setTimeout(() => {
+      try {
+        const v = { male: readWav(voiceBufs.male, true).x, female: readWav(voiceBufs.female, true).x, baby: readWav(voiceBufs.baby, false).x };
+        onWorker({ id, res: render(params, v) });
+      } catch (err) { onWorker({ id, error: String(err) }); }
+    }, 30);
+  }
+}
+function onWorker(d) {
+  if (d.progress) { setStatus(true, d.progress + "…"); return; }
+  busy = false;
+  if (d.error) { setStatus(false, "Rendering failed: " + d.error.split("\n")[0]); if (queued) startRender(); return; }
+  RES = d.res; RP = reqParams; buffers = {};
+  const wasQueued = queued;
+  if (queued) startRender();
+  srpPeaks = (RES.srp.peaks || []).map(p => typeof p === "number" ? { az: p, el: 0 } : p);
+  drawHead(); drawLegend(); drawWarns(); syncKnobs(); buildLists(); buildScores(); drawTimeline();
+  setStatus(wasQueued, wasQueued ? "Updating…" : `Rendered in ${(RES.ms / 1000).toFixed(1)} s.`);
+  if (!view || view.src !== "py") selectTrack(view ? view.key : "mic1", false);
+  const truth = RP.speakers.map(s => `${s.id.replace("s", "S")} ${Math.round(s.az)}°`).join(", ");
+  $("hears").innerHTML = `Robot hears sound from <b>${srpPeaks.map(p => Math.round(p.az) + "°" + (p.el ? " / " + Math.round(p.el) + "° up" : "")).join(", ")}</b> · true: ${truth}`;
+}
+function setStatus(spin, text) { $("status").innerHTML = (spin ? '<span class="spinner" aria-hidden="true"></span>' : "") + `<span>${text}</span>`; }
+function changed(now) {
+  syncKnobs(); drawHead(); drawLegend(); drawTimeline();
+  clearTimeout(timer);
+  timer = setTimeout(startRender, now ? 0 : 450);
+}
+
+// ---------------------------------------------------------------- timeline
+const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / 5.5;
+let tlHead = el("line", {});
+function drawTimeline() {
+  const tl = $("tl"); tl.textContent = "";
+  const q = RP && RES ? RP : P, rows = [];
+  q.speakers.forEach((s, i) => rows.push({ name: `S${i + 1} ${voiceLabel(s.voice)}${s.target ? "" : " (int.)"}`, h: 20, on: true, c: `var(--s${i + 1})`, talk: RES && RES.talk && RES.talk[s.id] }));
+  q.noises.forEach((n, i) => rows.push({ name: `N${i + 1} ${n.label}`, h: 12, on: n.on, c: "var(--noise)", flat: true, moving: !!n.path }));
+  const act = { fan: q.fanOn, neck: q.neckOn || q.clicksOn, sh: q.shouldersOn || q.clicksOn, walk: q.footstepsOn };
+  for (const [name, key] of [["Fan speed", "fan"], ["Head turning", "neck"], ["Arm gesture", "sh"], ["Walking", "walk"]]) rows.push({ name, h: 20, on: act[key], c: "var(--noise)", motor: key });
+  let y = 10;
+  for (const r of rows) {
+    const h = r.h;
+    el("text", { x: X0 - 12, y: y + h / 2 + 4, "text-anchor": "end", "font-size": h < 20 ? 10.5 : 12.5, fill: r.on ? "var(--ink)" : "var(--soft)" }, tl, r.name.length > 19 ? r.name.slice(0, 18) + "…" : r.name);
+    el("rect", { x: X0, y, width: X1 - X0, height: h, rx: 4, fill: "var(--bg)" }, tl);
+    if (r.on) {
+      if (r.talk) el("rect", { x: xs(r.talk[0]), y, width: xs(r.talk[1]) - xs(r.talk[0]), height: h, rx: 4, fill: r.c }, tl);
+      else if (r.flat) el("rect", { x: X0, y, width: X1 - X0, height: h, rx: 4, fill: r.c, "fill-opacity": 0.35, stroke: r.c, "stroke-dasharray": r.moving ? "5 3" : "none" }, tl);
+      else if (r.motor && RES && RES.motor && RES.motor[r.motor]) {
+        const vals = RES.motor[r.motor].map(Math.abs), mx = r.motor === "fan" ? Math.max(6000, ...vals) : Math.max(...vals) || 1;
+        let d = `M${xs(0)} ${y + h}`;
+        vals.forEach((v, i) => { d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
+        d += ` L${xs((vals.length - 1) / 100)} ${y + h} Z`;
+        el("path", { d, fill: "var(--noise)", "fill-opacity": 0.45, stroke: "var(--noise)", "stroke-width": 1 }, tl);
+      }
+    }
+    y += h + 8;
+  }
+  const H = y + 22;
+  tl.setAttribute("viewBox", `0 0 900 ${H}`);
+  for (let s = 0; s <= 5; s++) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
+  tlHead = el("line", { x1: X0, x2: X0, y1: 6, y2: H - 20, stroke: "var(--ink)", "stroke-width": 2, opacity: 0 }, tl);
+}
+
+// ---------------------------------------------------------------- audio
+// Single tracks play through an <audio> element (works with the phone's silent switch on);
+// the mic mix uses Web Audio. Both are unlocked on the first tap, inside the gesture.
+let ctx = null, buffers = {}, playing = null, stereo = false, player = null, unlocked = false;
+const PLAY = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 1.5v11l9-5.5z" fill="currentColor"/></svg>';
+const DL = '<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M7 1.5v7.5M3.5 6 7 9.5 10.5 6M2 12.5h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const STOP = '<svg viewBox="0 0 14 14" aria-hidden="true"><rect x="2.5" y="2.5" width="9" height="9" rx="1" fill="currentColor"/></svg>';
+function audioCtx() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); return ctx; }
+function wavBlob(arr, rate = 16000) { return new Blob([wavBytes(arr, rate)], { type: "audio/wav" }); }
+function wavBytes(arr, rate = 16000) {
+  const n = arr.length, b = new ArrayBuffer(44 + 2 * n), v = new DataView(b);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + 2 * n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, 2 * n, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, arr[i])) * 32767, true);
+  return new Uint8Array(b);
+}
+// ---- downloads: the Claude viewer saves .zip (not .wav), so audio goes inside a zip there
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(files) {                       // files: [{name, data: Uint8Array}], stored (no compression)
+  const enc = new TextEncoder(), parts = [], central = [];
+  let off = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name), crc = crc32(f.data), h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(8, 0, true);
+    h.setUint32(14, crc, true); h.setUint32(18, f.data.length, true); h.setUint32(22, f.data.length, true); h.setUint16(26, name.length, true);
+    parts.push(new Uint8Array(h.buffer), name, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true);
+    c.setUint32(16, crc, true); c.setUint32(20, f.data.length, true); c.setUint32(24, f.data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+    central.push(new Uint8Array(c.buffer), name);
+    off += 30 + name.length + f.data.length;
+  }
+  const size = central.reduce((a, u) => a + u.length, 0), e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: "application/zip" });
+}
+const downloadsP = window.claude && window.claude.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
+function plainDownload(name, blob) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+async function offerFiles(zipName, files) {
+  const dl = await downloadsP;
+  if (dl) {
+    try { await dl.save({ filename: zipName, data: makeZip(files) }); setStatus(false, `Saved ${zipName}.`); }
+    catch (e) { if (e && e.code !== "declined") setStatus(false, `Couldn't save the file: ${e.message || e.code}.`); }
+    return;
+  }
+  if (files.length === 1) plainDownload(files[0].name, new Blob([files[0].data], { type: files[0].name.endsWith(".wav") ? "audio/wav" : "text/plain" }));
+  else plainDownload(zipName, makeZip(files));
+}
+const SILENT = URL.createObjectURL(wavBlob(new Float32Array(1600)));
+function wavDataUri(arr) {
+  return new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(wavBlob(arr)); });
+}
+function unlock() {
+  if (unlocked) return;
+  unlocked = true;
+  try { const c = audioCtx(); c.resume(); const s = c.createBufferSource(); s.buffer = c.createBuffer(1, 1, c.sampleRate); s.connect(c.destination); s.start(); } catch (_) {}
+  try { player = new Audio(); player.preload = "auto"; player.src = SILENT; const p = player.play(); if (p) p.catch(() => {}); } catch (_) { player = null; }
+}
+for (const ev of ["pointerdown", "touchend", "keydown", "click"]) document.addEventListener(ev, unlock, { capture: true, passive: true });
+function toBuffer(arr) {
+  const c = audioCtx();
+  try { const b = c.createBuffer(1, arr.length, 16000); b.copyToChannel(arr, 0); return b; }
+  catch (_) {                                   // older Safari: no 16 kHz buffers, so upsample x3
+    const b = c.createBuffer(1, arr.length * 3, 48000), d = b.getChannelData(0);
+    for (let i = 0; i < arr.length; i++) { const a = arr[i], z = i + 1 < arr.length ? arr[i + 1] : a; d[3 * i] = a; d[3 * i + 1] = a + (z - a) / 3; d[3 * i + 2] = a + 2 * (z - a) / 3; }
+    return b;
+  }
+}
+function audioFail(err) {
+  stopAll();
+  setStatus(false, "The browser didn't start the sound" + (err && err.name ? ` (${err.name})` : "") + ". Tap Play again. On a phone, turn the volume up and check the silent switch.");
+}
+function stopAll() {
+  if (!playing) return;
+  (playing.sources || []).forEach(s => { try { s.stop(); } catch (_) {} });
+  if (playing.el) { playing.el.pause(); playing.el.onended = null; }
+  if (playing.url) URL.revokeObjectURL(playing.url);
+  if (playing.btn) playing.btn.innerHTML = PLAY;
+  playing = null;
+  $("vPlay").textContent = "Play"; $("playMics").textContent = "Play selected mics";
+  $("ph").style.opacity = 0; if (tlHead) tlHead.setAttribute("opacity", 0);
+}
+function playArray(key, arr, btn, offset = 0) {
+  if (playing && playing.key === key && !offset) { stopAll(); return; }
+  stopAll(); unlock();
+  const dur = arr.length / 16000;
+  const mark = () => { if (btn) btn.innerHTML = STOP; $("vPlay").textContent = "Stop"; tick(); };
+  if (player) {
+    const url = URL.createObjectURL(wavBlob(arr));
+    const el = player;
+    playing = { key, el, url, dur, btn, viewKey: key };
+    el.onended = () => { if (playing && playing.el === el) stopAll(); };
+    el.src = url;
+    const go = () => { try { el.currentTime = offset; } catch (_) {} const p = el.play(); return p && p.then ? p : Promise.resolve(); };
+    // blob URL first; if the page blocks it, try an embedded data: URL, then Web Audio
+    go().then(mark).catch(err => {
+      if (!playing || playing.el !== el) return;
+      wavDataUri(arr).then(uri => { el.src = uri; return go(); }).then(mark)
+        .catch(err2 => { if (playing && playing.el === el) { playing.el = null; playWebAudio(key, arr, btn, offset, err2 || err); } });
+    });
+    return;
+  }
+  playWebAudio(key, arr, btn, offset);
+}
+function playWebAudio(key, arr, btn, offset, firstErr) {
+  try {
+    const c = audioCtx();
+    const s = c.createBufferSource(); s.buffer = toBuffer(arr); s.connect(c.destination);
+    const t = c.currentTime + 0.03; s.start(t, offset);
+    playing = { key, sources: [s], start: t - offset, dur: arr.length / 16000, btn, viewKey: key };
+    s.onended = () => { if (playing && playing.sources && playing.sources[0] === s) stopAll(); };
+    c.resume().then(() => { if (c.state !== "running") audioFail(firstErr); }).catch(audioFail);
+    if (btn) btn.innerHTML = STOP; $("vPlay").textContent = "Stop"; tick();
+  } catch (err) { audioFail(err); }
+}
+function playTime() {
+  if (!playing) return 0;
+  if (playing.el) return playing.el.currentTime || 0;
+  return Math.max(0, audioCtx().currentTime - playing.start);
+}
+const micPan = i => stereo ? -Math.sin(i * 2 * Math.PI / Math.max(1, micOn.length)) * 0.9 : 0;
+function updateMicMix() {
+  if (!playing || playing.key !== "mics") return;
+  const n = Math.max(1, playing.gains.filter((_, i) => micOn[i] !== false).length), t = ctx.currentTime;
+  playing.gains.forEach((g, i) => g.gain.setTargetAtTime(micOn[i] !== false ? (stereo ? 2 : 1) / n : 0, t, 0.02));
+  playing.pans.forEach((p, i) => p.pan.setTargetAtTime(micPan(i), t, 0.02));
+}
+$("playMics").addEventListener("click", () => {
+  if (!RES) return;
+  if (playing && playing.key === "mics") { stopAll(); return; }
+  stopAll(); unlock();
+  let c;
+  try { c = audioCtx(); } catch (err) { audioFail(err); return; }
+  c.resume().then(() => { if (c.state !== "running") audioFail(); }).catch(audioFail);
+  const sources = [], gains = [], pans = [], t = c.currentTime + 0.05;
+  for (let i = 0; i < RES.mics.length; i++) {
+    const s = c.createBufferSource(); s.buffer = toBuffer(RES.mics[i]);
+    const g = c.createGain();
+    if (c.createStereoPanner) { const p = c.createStereoPanner(); s.connect(g).connect(p).connect(c.destination); pans.push(p); }
+    else s.connect(g).connect(c.destination);
+    sources.push(s); gains.push(g);
+  }
+  playing = { key: "mics", sources, gains, pans, start: t, dur: RES.mics[0].length / 16000 };
+  updateMicMix(); sources.forEach(s => s.start(t));
+  sources[0].onended = () => { if (playing && playing.key === "mics") stopAll(); };
+  $("playMics").textContent = "Stop";
+  showArray("mics", "Selected microphones", micDesc(), micSum(), "page");
+  tick();
+});
+function micSum() {
+  const on = RES.mics.map((_, i) => micOn[i] !== false ? i : -1).filter(i => i >= 0), out = new Float32Array(RES.mics[0].length);
+  for (const i of on) for (let t = 0; t < out.length; t++) out[t] += RES.mics[i][t] / on.length;
+  return out;
+}
+function micDesc() { const on = RES.mics.map((_, i) => micOn[i] !== false ? i + 1 : 0).filter(Boolean); return on.length === RES.mics.length ? `All ${on.length} microphones summed.` : on.length ? `Mics ${on.join(", ")} summed.` : "No microphones selected."; }
+$("allOn").addEventListener("click", () => { micOn.fill(true); drawHead(); updateMicMix(); });
+$("oneOn").addEventListener("click", () => { micOn = micOn.map((_, i) => i === 0); drawHead(); updateMicMix(); });
+$("stereo").addEventListener("click", e => { stereo = !stereo; e.currentTarget.setAttribute("aria-pressed", stereo); updateMicMix(); });
+
+function tick() {
+  if (!playing) return;
+  const t = Math.min(playing.dur, playTime());
+  const showHead = view && (playing.viewKey === view.key || (playing.key === "mics" && view.key === "mics"));
+  if (showHead) {
+    $("ph").style.opacity = 1;
+    const plots = $("plots"), cs = getComputedStyle(plots);
+    const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = plots.clientWidth - l - r;
+    $("ph").style.left = (l + w * t / 5.5) + "px";
+    tlHead.setAttribute("x1", xs(t)); tlHead.setAttribute("x2", xs(t)); tlHead.setAttribute("opacity", 1);
+  }
+  $("vTime").textContent = `${t.toFixed(2)} / ${playing.dur.toFixed(2)} s`;
+  requestAnimationFrame(tick);
+}
+
+// ---------------------------------------------------------------- viewer
+let view = null;
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function hexRgb(h) {
+  const c = document.createElement("canvas").getContext("2d"); c.fillStyle = h; const s = c.fillStyle;
+  if (s.startsWith("#")) return [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+  return s.match(/\d+/g).slice(0, 3).map(Number);
+}
+function showArray(key, name, desc, arr, src) {
+  view = { key, name, desc, arr, src };
+  $("vName").textContent = name; $("vDesc").textContent = desc;
+  if (!playing) $("vTime").textContent = `0.00 / ${(arr.length / 16000).toFixed(2)} s`;
+  document.querySelectorAll("ol.tracks li").forEach(li => li.classList.toggle("sel", li.dataset.key === key));
+  drawWave(arr); drawSpec(arr);
+}
+function drawWave(arr) {
+  const c = $("wave"), dpr = window.devicePixelRatio || 1, W = Math.max(1, Math.round(c.clientWidth * dpr)), H = Math.round(84 * dpr);
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  g.fillStyle = css("--spec0"); g.fillRect(0, 0, W, H);
+  g.fillStyle = css("--wave");
+  const per = arr.length / W;
+  let peak = 0; for (const v of arr) peak = Math.max(peak, Math.abs(v));
+  const sc = (H / 2 - 2) / Math.max(peak, 0.05);
+  for (let x = 0; x < W; x++) {
+    let lo = 0, hi = 0;
+    for (let i = Math.floor(x * per); i < Math.floor((x + 1) * per); i++) { const v = arr[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    g.fillRect(x, H / 2 - hi * sc, 1, Math.max(1, (hi - lo) * sc));
+  }
+}
+function drawSpec(arr) {
+  const nfft = 512, hop = 128, nb = 257, nfr = Math.floor((arr.length - nfft) / hop) + 1;
+  const img = new Float32Array(nfr * nb);
+  const re = new Float64Array(nfft), im = new Float64Array(nfft);
+  let mx = -1e9;
+  for (let f = 0; f < nfr; f++) {
+    for (let i = 0; i < nfft; i++) { re[i] = arr[f * hop + i] * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / nfft)); im[i] = 0; }
+    fft(re, im, false);
+    for (let k = 0; k < nb; k++) { const v = 10 * Math.log10(re[k] * re[k] + im[k] * im[k] + 1e-12); img[f * nb + k] = v; if (v > mx) mx = v; }
+  }
+  const c = $("spec"); c.width = nfr; c.height = nb;
+  const g = c.getContext("2d"), data = g.createImageData(nfr, nb);
+  const c0 = hexRgb(css("--spec0")), c1 = hexRgb(css("--spec1")), c2 = hexRgb(css("--spec2"));
+  for (let f = 0; f < nfr; f++) for (let k = 0; k < nb; k++) {
+    const v = Math.max(0, Math.min(1, (img[f * nb + k] - (mx - 70)) / 70));
+    const [a, b, t] = v < 0.6 ? [c0, c1, v / 0.6] : [c1, c2, (v - 0.6) / 0.4];
+    const o = ((nb - 1 - k) * nfr + f) * 4;
+    data.data[o] = a[0] + (b[0] - a[0]) * t; data.data[o + 1] = a[1] + (b[1] - a[1]) * t; data.data[o + 2] = a[2] + (b[2] - a[2]) * t; data.data[o + 3] = 255;
+  }
+  g.putImageData(data, 0, 0);
+}
+$("vPlay").addEventListener("click", () => {
+  if (!view) return;
+  if (playing) { stopAll(); return; }
+  const btn = document.querySelector(`ol.tracks li[data-key="${view.key}"] .play`);
+  playArray(view.key, view.arr, btn);
+});
+$("plots").addEventListener("click", e => {
+  if (!view) return;
+  const plots = $("plots"), cs = getComputedStyle(plots), rect = plots.getBoundingClientRect();
+  const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = rect.width - l - r;
+  const t = Math.max(0, Math.min(5.4, (e.clientX - rect.left - l) / w * 5.5));
+  stopAll();
+  const btn = document.querySelector(`ol.tracks li[data-key="${view.key}"] .play`);
+  playArray(view.key, view.arr, btn, t);
+});
+
+
+// ---------------------------------------------------------------- track rows
+function trackRow(list, o) {
+  const li = document.createElement("li"); li.dataset.key = o.key;
+  li.innerHTML = `<span class="badge" style="--c:${o.color || "var(--soft)"}">${o.badge || ""}</span><div class="tt"><b></b><span></span></div>`;
+  li.querySelector("b").textContent = o.label; li.querySelector(".tt span").textContent = o.desc || "";
+  if (o.score != null) {
+    const s = document.createElement("div"); s.className = "score";
+    s.innerHTML = `<b>${o.score >= 0 ? "+" : "−"}${Math.abs(o.score).toFixed(1)}</b> dB` + (o.py != null ? `<span class="py">Python ${o.py >= 0 ? "+" : "−"}${Math.abs(o.py).toFixed(1)}</span>` : "");
+    li.appendChild(s);
+  }
+  if (o.file) {
+    const d = document.createElement("button"); d.className = "dl"; d.innerHTML = DL; d.setAttribute("aria-label", "Download " + o.label); d.title = "Download";
+    d.addEventListener("click", e => { e.stopPropagation(); (o.bytes ? o.bytes() : o.get().then(a => a && wavBytes(a))).then(u => { if (u) offerFiles(o.file.replace(/\.wav$/, ".zip"), [{ name: o.file, data: u }]); }); });
+    li.appendChild(d);
+  }
+  const btn = document.createElement("button"); btn.className = "play"; btn.innerHTML = PLAY; btn.setAttribute("aria-label", "Play " + o.label);
+  li.appendChild(btn);
+  const name = o.viewName || o.label;
+  const show = () => o.get().then(arr => { if (arr) showArray(o.key, name, o.desc || "", arr, o.src); });
+  li.addEventListener("click", e => { if (e.target.closest(".play")) return; show(); });
+  btn.addEventListener("click", () => o.get().then(arr => { if (!arr) return; showArray(o.key, name, o.desc || "", arr, o.src); playArray(o.key, arr, btn); }));
+  list.appendChild(li);
+  return li;
+}
+
+// ---------------------------------------------------------------- track lists
+function buildLists() {
+  const q = RP, py = pyScores(q), S = RES.scores, bl = $("beamList"); bl.textContent = "";
+  const page = a => () => Promise.resolve(a);
+  trackRow(bl, { key: "mic1", file: "mic1_original.wav", label: "Mic 1 alone (the original)", desc: "Everything, as one microphone hears it.", badge: "1", color: "var(--mic)", get: page(RES.tracks.mic1), src: "page" });
+  q.speakers.forEach((s, i) => {
+    if (!s.target) return;
+    const c = `var(--s${i + 1})`, nm = spkName(s);
+    const items = [["das", "Delay-and-sum", "Lines up the mics toward this speaker."], ["mvdr", "MVDR", "Also turns down sounds from other directions."], ["learned", "MVDR + learned robot noise", "Also heard the robot moving with nobody talking."]];
+    const sub = document.createElement("li"); sub.className = "subrow"; sub.innerHTML = `<h3 class="subhead" style="color:${c}">Aimed at ${esc(nm)}</h3>`; bl.appendChild(sub);
+    for (const [k, label, desc] of items) {
+      const id = `${s.id}_${k}`;
+      if (!RES.tracks[id]) continue;
+      trackRow(bl, { key: id, file: `${id}.wav`, label, viewName: `${label}, aimed at ${nm}`, desc, score: S[id], py: py[id], badge: i + 1, color: c, get: page(RES.tracks[id]), src: "page" });
+    }
+  });
+  const sl = $("soloList"); sl.textContent = "";
+  const solos = q.speakers.map((s, i) => [s.id, spkName(s), `var(--s${i + 1})`, i + 1])
+    .concat(q.noises.map((n, i) => [n.id, n.label, "var(--noise)", "N" + (i + 1)]))
+    .concat(ROBOT_NOISES.map(n => [n.k, n.label, "var(--noise)", n.label[0]]));
+  for (const [k, label, c, b] of solos) if (RES.solos[k]) trackRow(sl, { key: "solo_" + k, file: `alone_${k}.wav`, label, desc: k === "footsteps" ? "Approximate." : "", badge: b, color: c, get: page(RES.solos[k]), src: "page" });
+  if (view) document.querySelectorAll("ol.tracks li").forEach(li => li.classList.toggle("sel", li.dataset.key === view.key));
+}
+const SCORE_ROWS = [["mic", "Mic 1 alone (the original)"], ["das", "Delay-and-sum"], ["mvdr", "MVDR beamformer"], ["learned", "MVDR, learned robot noise"]];
+function fmt(v) { return v == null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`; }
+function scoreData() {
+  const q = RP, py = pyScores(q), S = RES.scores, tg = q.speakers.map((s, i) => ({ s, i })).filter(x => x.s.target);
+  const cols = SCORE_ROWS.filter(([k]) => tg.some(({ s }) => (k === "mic" ? S["mic_" + s.id] : S[`${s.id}_${k}`]) != null));
+  const rows = tg.map(({ s, i }) => ({ s, i, cells: cols.map(([k, label]) => {
+    const key = k === "mic" ? "mic_" + s.id : `${s.id}_${k}`, v = S[key];
+    return { k, label, v, gain: k === "mic" || v == null ? null : v - S["mic_" + s.id], py: py[key] };
+  }) }));
+  return { cols, rows, hasPy: Object.keys(py).length > 0 };
+}
+function buildScores() {
+  const { cols, rows, hasPy } = scoreData(), t = $("scoreTable");
+  t.innerHTML = `<thead><tr><th class="sp">Aimed at</th>${cols.map(([, l]) => `<th class="g">${l}</th>`).join("")}</tr></thead><tbody></tbody>`;
+  const tb = t.querySelector("tbody");
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c =>
+      `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}${c.py == null ? "" : `<small class="py">Python ${fmt(c.py)} dB</small>`}</td>`).join("");
+    tb.appendChild(tr);
+  }
+  if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
+  $("scoreNote").textContent = hasPy
+    ? "Python lines: the same scene from sim_conversation.py (pyroomacoustics). The page's numbers should land within about 0.5 dB."
+    : "Python numbers exist only for the “Baby crying” and “Baby + fan” classic tests with their default settings (Custom scene).";
+  $("dlAll").disabled = false;
+}
+function scoresCsv() {
+  const { rows } = scoreData(), f = v => v == null ? "" : v.toFixed(2), lines = ["speaker,voice,processing,score_db,gain_db,python_db"];
+  for (const r of rows) for (const c of r.cells) lines.push([r.s.id, r.s.voice, `"${c.label}"`, f(c.v), f(c.gain), f(c.py)].join(","));
+  return lines.join("\n") + "\n";
+}
+$("dlAll").addEventListener("click", () => {
+  if (!RES) return;
+  const enc = new TextEncoder(), files = [];
+  RES.mics.forEach((m, i) => files.push({ name: `mics/mic${i + 1}.wav`, data: wavBytes(m) }));
+  files.push({ name: "mic1_original.wav", data: wavBytes(RES.tracks.mic1) });
+  for (const k in RES.tracks) if (k !== "mic1") files.push({ name: `beams/${k}.wav`, data: wavBytes(RES.tracks[k]) });
+  for (const k in RES.solos) files.push({ name: `alone/${k}.wav`, data: wavBytes(RES.solos[k]) });
+  files.push({ name: "scores.csv", data: enc.encode(scoresCsv()) });
+  files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2 }, null, 2) + "\n") });
+  offerFiles(`scene_simulator_${RP.scenario === "custom" ? "custom_" + (presetMatches(RP) ? presetId : "edited") : RP.scenario}.zip`, files);
+});
+function selectTrack(key) {
+  const map = { ...RES.tracks }; for (const k in RES.solos) map["solo_" + k] = RES.solos[k];
+  if (key === "mics") { showArray("mics", "Selected microphones", micDesc(), micSum(), "page"); return; }
+  const li = document.querySelector(`ol.tracks li[data-key="${key}"]`);
+  const k = map[key] ? key : "mic1";
+  const label = li && map[key] ? li.querySelector("b").textContent : "Mic 1 alone", desc = li && map[key] ? li.querySelector(".tt span").textContent : "";
+  showArray(k, label, desc, map[k], "page");
+}
+
+// ---------------------------------------------------------------- Python recordings
+const pyCache = {};
+function fetchWav(path) {
+  if (pyCache[path]) return pyCache[path];
+  const tryUrl = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
+  pyCache[path] = tryUrl("audio/" + path).catch(() => tryUrl("../" + path))
+    .then(buf => Float32Array.from(readWav(buf).x))
+    .catch(() => { delete pyCache[path]; return null; });
+  return pyCache[path];
+}
+function fetchRaw(path) {
+  const tryUrl = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
+  return tryUrl("audio/" + path).catch(() => tryUrl("../" + path)).then(b => new Uint8Array(b)).catch(() => null);
+}
+function buildPyList() {
+  const root = $("pyList");
+  for (const grp of PY_FILES) {
+    const box = document.createElement("details"); box.className = "lgroup";
+    if (root.children.length < 2) box.open = true;
+    const h = document.createElement("summary"); h.innerHTML = `<h3></h3><small>${grp.files.length} files</small>`; h.querySelector("h3").textContent = grp.title; box.appendChild(h);
+    const ol = document.createElement("ol"); ol.className = "tracks"; box.appendChild(ol);
+    const err = document.createElement("p"); err.className = "err"; err.hidden = true;
+    err.textContent = "Couldn't load this file. The list works on the published page, or when the repo folder is served by a local web server (python -m http.server).";
+    for (const f of grp.files) {
+      trackRow(ol, { key: "py_" + f.path, file: f.path.split("/").pop(), bytes: () => fetchRaw(f.path), label: f.label, viewName: `Python · ${grp.title} · ${f.label}`, desc: f.path.split("/").pop(), badge: "py", color: "var(--soft)", src: "py",
+        get: () => fetchWav(f.path).then(a => { err.hidden = !!a; return a; }) });
+    }
+    box.appendChild(err);
+    root.appendChild(box);
+  }
+}
+
+// ---------------------------------------------------------------- sound check
+const beepArr = Float32Array.from({ length: 16000 }, (_, i) => 0.4 * Math.sin(2 * Math.PI * 660 * i / 16000) * Math.min(1, i / 400, (16000 - i) / 400));
+function beepLog(msg) { $("beepOut").textContent = msg + `\nAudio engine: ${ctx ? ctx.state + ", " + ctx.sampleRate + " Hz" : "not started"} · ${navigator.userAgent}`; }
+$("beep1").addEventListener("click", () => {
+  stopAll();
+  const a = new Audio(URL.createObjectURL(wavBlob(beepArr)));
+  a.onerror = () => beepLog("Beep 1: the audio player could not load the sound (error " + (a.error && a.error.code) + ").");
+  const p = a.play();
+  (p && p.then ? p : Promise.resolve()).then(() => beepLog("Beep 1: playing through the audio player.")).catch(e => beepLog("Beep 1 blocked: " + e.name + " " + e.message));
+});
+$("beep2").addEventListener("click", () => {
+  stopAll();
+  const a = new Audio();
+  wavDataUri(beepArr).then(uri => { a.src = uri; return a.play(); })
+    .then(() => beepLog("Beep 2: playing an embedded file.")).catch(e => beepLog("Beep 2 blocked: " + e.name + " " + e.message));
+});
+$("beep3").addEventListener("click", () => {
+  stopAll();
+  try {
+    const c = audioCtx();
+    const o = c.createOscillator(), g = c.createGain();
+    g.gain.value = 0.25; o.frequency.value = 660; o.connect(g).connect(c.destination);
+    o.start(); o.stop(c.currentTime + 1);
+    c.resume().then(() => beepLog("Beep 3: Web Audio is " + c.state + ".")).catch(e => beepLog("Beep 3 blocked: " + e.name + " " + e.message));
+  } catch (e) { beepLog("Beep 3 failed: " + e.name + " " + e.message); }
+});
+
+// ---------------------------------------------------------------- start
+buildStatic(); buildRobot(); buildCards();
+(function () {
+  const first = sceneOrder().find(id => SCENARIOS[id]);
+  if (first) loadScene(first); else loadScene("custom", "robot");
+})();
+drawHead(); drawLegend(); buildPyList();
+let resizeT = null;
+window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
+window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; } };
+})();
+</script>

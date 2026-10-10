@@ -1,0 +1,11 @@
+mic,result
+"mic 1 (L), data line 1","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,416,220"
+"mic 2 (R), data line 1","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,313,897"
+"mic 3 (L), data line 2","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,588,589"
+"mic 4 (R), data line 2","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,631,487"
+"mic 5 (L), data line 3","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,640,085"
+"mic 6 (R), data line 3","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,655,561"
+"mic 7 (L), data line 4","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,462,844"
+"mic 8 (R), data line 4","0 of 800 different from Python; vs audio_pipe's model: 0; start bit 3; peak 1,315,864"
+ALL MICS,every sample identical (8 mics x 800 samples = 6400)
+wall time,101 s
