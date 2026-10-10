@@ -46,8 +46,6 @@ h2 { font-size: 1.1rem; margin: 0; font-weight: 600; }
 h3 { font-size: .8rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); }
 .hint { color: var(--soft); font-size: .88rem; margin: 0; }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
-.top { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 20px; align-items: stretch; }
-@media (max-width: 880px) { .top { grid-template-columns: minmax(0, 1fr); } }
 .intro { gap: 14px; }
 .intro-top { display: grid; gap: 8px; }
 .intro-top p:last-child { margin: 0; }
@@ -64,6 +62,13 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 .about p { margin: 0; color: var(--soft); font-size: .88rem; }
 .lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 880px) { .lists { grid-template-columns: minmax(0, 1fr); } }
+
+/* what the robot hears: top view left, readouts and controls right */
+.hear-grid { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 12px 28px; align-items: start; }
+@media (max-width: 880px) { .hear-grid { grid-template-columns: minmax(0, 1fr); } }
+.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.hear-side .legend { justify-content: flex-start; }
+.hear-side .hears { text-align: left; }
 
 /* head */
 #head { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; touch-action: none; }
@@ -91,8 +96,10 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* knobs */
 .knobs { display: grid; gap: 16px; }
-@media (min-width: 1080px) { .knobs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
-  .kcol { display: grid; gap: 16px; align-content: start; } }
+@media (min-width: 880px) { .knobs { display: block; columns: 2; column-gap: 32px; }
+  .knobs .kgroup { break-inside: avoid; margin-bottom: 16px; }
+  .knobs .kgroup + .kgroup { border-top: 0; padding-top: 0; }
+  .kgroup { border-bottom: 1px solid var(--line); padding-bottom: 14px; } }
 .kcol { display: grid; gap: 16px; align-content: start; }
 .kgroup { display: grid; gap: 10px; }
 .kgroup + .kgroup { border-top: 1px solid var(--line); padding-top: 14px; }
@@ -229,6 +236,7 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .nsrc details[open] { display: grid; gap: 6px; }
 .tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 0 6px; border-radius: 999px; border: 1px solid var(--noise); color: var(--noise); margin-left: 4px; white-space: nowrap; }
 .tag.clamp { border-color: var(--bad); color: var(--bad); }
+.tag[hidden] { display: none; }
 .noise .nid { font-family: var(--mono); font-size: .75rem; color: var(--soft); margin-right: 4px; }
 button.small { padding: 4px 11px; font-size: .84rem; }
 button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
@@ -267,11 +275,12 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
     </div>
   </section>
 
-  <div class="top">
-    <section aria-labelledby="h-head">
-      <h2 id="h-head">What the robot hears</h2>
-      <p class="hint">Top view, robot facing right (0°, counter-clockwise). Drag a speaker (circle) or a noise source (diamond); click a noise source to switch it on or off; click a microphone to include it in the mix. With a marker focused: arrow keys turn it (Shift for fine steps), + and − change the distance, Page Up and Page Down change the elevation.</p>
+  <section class="hearsec" aria-labelledby="h-head">
+    <h2 id="h-head">What the robot hears</h2>
+    <div class="hear-grid">
       <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
+      <div class="hear-side">
+      <p class="hint">Top view, robot facing right (0°, counter-clockwise). Drag a speaker (circle) or a noise source (diamond); click a noise source to switch it on or off; click a microphone to include it in the mix. With a marker focused: arrow keys turn it (Shift for fine steps), + and − change the distance, Page Up and Page Down change the elevation.</p>
       <div class="legend" id="legend"></div>
       <p class="hears" id="hears"></p>
       <div class="callout" id="warns" role="status" hidden></div>
@@ -292,13 +301,14 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
         </div>
         <p class="hint" id="beepOut" aria-live="polite"></p>
       </details>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <section aria-labelledby="h-knobs">
-      <h2 id="h-knobs">Scene setup</h2>
-      <div class="knobs" id="knobs" style="grid-template-columns: minmax(0, 1fr)"></div>
-    </section>
-  </div>
+  <section aria-labelledby="h-knobs">
+    <h2 id="h-knobs">Scene setup</h2>
+    <div class="knobs" id="knobs"></div>
+  </section>
 
   <section aria-labelledby="h-scores">
     <div class="vhead">
