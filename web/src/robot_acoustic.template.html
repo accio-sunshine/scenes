@@ -54,7 +54,8 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 /* header bar: name + scene selector */
 .apphead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-block: 18px 2px; }
 .apphead .brand { display: grid; gap: 2px; min-width: 0; }
-.apphead .brand .lead { font-family: var(--mono); font-size: .76rem; letter-spacing: .02em; }
+.apphead .brand .lead { font-size: .9rem; }
+.intro { margin: 0; max-width: 78ch; color: var(--ink); font-size: .92rem; }
 .scenebar { display: grid; gap: 8px; min-width: 0; }
 .sceneinfo { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; margin-top: -4px; }
 .sceneinfo .hint { max-width: 80ch; }
@@ -263,12 +264,13 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   <header class="apphead">
     <div class="brand">
       <h1 id="h-title">Scene Simulator</h1>
-      <p class="lead">8-mic robot head · 16 kHz · 5.5 s scenes</p>
+      <p class="lead">Listening tests for a robot's microphone array</p>
     </div>
     <div class="scenebar">
       <div class="cards" id="cards" role="group" aria-label="Scene"></div>
     </div>
   </header>
+  <p class="intro">Build a scene around the robot's head (a room, up to five people and the noise of the place), then hear it the way its microphones do. The page measures how well each beamformer picks out every speaker, and checks those numbers against a fuller Python simulation of the same scene.</p>
   <div id="sceneInfo" class="sceneinfo">
     <p class="hint" id="sceneNote" aria-live="polite"></p>
     <div id="customBox" hidden>
