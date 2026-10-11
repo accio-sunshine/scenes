@@ -183,7 +183,9 @@ details.lgroup summary small { white-space: nowrap; margin-left: auto; color: va
 #scoreTable col.c-proc { width: 28%; }
 #scoreTable .g { border-left: 1px solid var(--line); }
 #scoreTable .who-a { color: var(--a); } #scoreTable .who-b { color: var(--b); }
-#scoreTable td.py { color: var(--soft); font-family: var(--mono); font-size: .82rem; }
+#scoreTable th.sub { font-size: .7rem; padding-top: 4px; text-align: right; }
+#scoreTable th.pyh, #scoreTable td.pyc { background: var(--bg); }
+#scoreTable td.pyc b { font-weight: 500; }
 #scoreTable tr.orig td { background: var(--bg); }
 #scoreTable td b { font-weight: 600; }
 .dl { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
@@ -2466,18 +2468,25 @@ function scoreData() {
 }
 function buildScores() {
   const { cols, rows, hasPy } = scoreData(), t = $("scoreTable");
-  t.innerHTML = `<thead><tr><th class="sp">Aimed at</th>${cols.map(([, l]) => `<th class="g">${l}</th>`).join("")}</tr></thead><tbody></tbody>`;
+  // with a Python check, each method gets a Page and a Python column side by side
+  const sub = hasPy ? 2 : 1;
+  t.innerHTML = `<thead><tr><th class="sp"${hasPy ? ' rowspan="2"' : ""}>Aimed at</th>${cols.map(([, l]) => `<th class="g" colspan="${sub}">${l}</th>`).join("")}</tr>`
+    + (hasPy ? `<tr>${cols.map(() => '<th class="g sub">Page</th><th class="sub pyh">Python</th>').join("")}</tr>` : "") + `</thead><tbody></tbody>`;
   const tb = t.querySelector("tbody");
+  let worst = null;
   for (const r of rows) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c =>
-      `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}${c.py == null ? "" : `<small class="py">Python ${fmt(c.py)} dB</small>`}</td>`).join("");
+    tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c => {
+      if (c.py != null && c.v != null) { const d = Math.abs(c.v - c.py); if (!worst || d > worst.d) worst = { d, s: r.s, label: c.label }; }
+      const page = `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}</td>`;
+      return hasPy ? page + `<td class="pyc">${c.py == null ? "—" : `<b>${fmt(c.py)} dB</b>`}</td>` : page;
+    }).join("");
     tb.appendChild(tr);
   }
-  if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
+  if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length * sub + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
   $("scoreNote").textContent = hasPy
-    ? "Python lines: an independent check of this exact scene. python/score_scene.py rebuilds it from the page's own sources and positions with pyroomacoustics (a fuller room model) and the original Python beamformer code. Close numbers mean the page's quick room model can be trusted here."
-    : PY_SCORES[pyKey(RP)] ? "No Python line: you changed the scene from its defaults, and Python was run on the defaults only. Download the zip and run python/score_scene.py on it to check your version."
+    ? `Python column: an independent check of this exact scene (its default settings). python/score_scene.py rebuilds it from the page's own sources and positions with pyroomacoustics, a fuller room model, and the original Python beamformer code. Largest difference here: ${worst.d.toFixed(1)} dB (${worst.label}, ${spkName(worst.s)}). Within about 1 dB, the page's quick answers can be trusted for this scene.`
+    : PY_SCORES[pyKey(RP)] ? "Python column hidden: you changed this scene from its default settings, and the stored Python check is for the defaults. Click the scene card again to reset it, or download the zip and run python/score_scene.py on it to check your version."
     : "No Python check for this scene yet. Download the zip and run python/score_scene.py on it.";
   $("dlAll").disabled = false;
 }
@@ -2536,7 +2545,7 @@ function syncPyList() {
   const name = custom ? "" : ((haveScenes() && SCENARIOS[sceneId] && SCENARIOS[sceneId].label) || SCENE_LABELS[sceneId] || sceneId);
   const pr = PRESETS.find(x => x.id === presetId), has = Object.values(PY_SCENE).includes(presetId);
   $("pyNote").textContent = !custom
-    ? `There are no Python recordings for the ${name} scene. Python (sim_conversation.py, sim_8mic_robot_noise.py) only simulated the classic tests: pick Custom (classic tests) to compare.`
+    ? `Python scores for the ${name} scene are in the Scores table (Python column). Python audio recordings exist only for the classic tests: pick Custom (classic tests) to listen to them.`
     : (has ? `Made with pyroomacoustics for the classic tests. The group for “${pr.label}” is opened${match ? "" : " (your settings differ from it now)"}.`
       : `Made with pyroomacoustics for the classic tests. Python has no recording of “${pr.label}”.`)
       + (presetId === "robot" ? " Python's robot scene has footsteps on; the page's Robot moving has them off." : "");
