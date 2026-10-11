@@ -3,7 +3,8 @@ make_python_scores.py  -  run the Python cross-check on every scene's default se
 
 For each scene (Home, Factory, Hospital, Automobile and the four Custom classic tests) it exports the scene with the
 page's engine (node web/tools/export_scene.js), scores it with score_scene.py and writes web/src/python_scores.json,
-which build.py puts into the page as the "Python" lines. Re-run it after changing a scenario or the engine, then
+which build.py puts into the page as the "Python" column. For the four scenarios it also writes the Python audio to
+python_out/<scene>/ (the classic tests already have the original scripts' recordings). Re-run it after changing a scenario or the engine, then
 rebuild the page (cd web && python build.py).
 
 Run (repo root):  python python/make_python_scores.py [scene ...]
@@ -21,6 +22,8 @@ sys.path.insert(0, HERE)
 import score_scene  # noqa: E402
 
 SCENES = ["home", "factory", "hospital", "automobile", "baby", "fan", "robot", "quiet"]
+AUDIO = {"home", "factory", "hospital", "automobile"}   # the classic tests already have the original scripts' recordings
+AUDIO_DIR = os.path.join(ROOT, "python_out")             # python_out/<scene>/mic1.wav, s1_mvdr.wav, ... (played by the page)
 OUT = os.path.join(ROOT, "web", "src", "python_scores.json")
 
 
@@ -31,7 +34,8 @@ def main(argv=None):
         for name in names:
             d = os.path.join(tmp, name)
             subprocess.run(["node", os.path.join(ROOT, "web", "tools", "export_scene.js"), name, d], check=True)
-            scores, info = score_scene.score(score_scene.Scene(d))
+            scores, info = score_scene.score(score_scene.Scene(d),
+                                             wav_dir=os.path.join(AUDIO_DIR, name) if name in AUDIO else None)
             page = json.load(open(os.path.join(d, "page_scores.json")))
             data["scenes"][name] = {"scores": {k: round(v, 2) for k, v in scores.items()}, "info": info,
                                     "page_at_run": {k: round(v, 2) for k, v in page.items()}}

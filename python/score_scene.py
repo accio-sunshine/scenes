@@ -29,7 +29,7 @@ import zipfile
 import numpy as np
 import pyroomacoustics as pra
 import soundfile as sf
-from scipy.signal import fftconvolve, stft
+from scipy.signal import fftconvolve, istft, stft
 
 NFFT, HOP, C = 512, 128, 343.0
 BANDS = [125, 250, 500, 1000, 2000, 4000, 8000]
@@ -109,6 +109,10 @@ def to_stft(x, fs):
     return stft(x, fs=fs, window="hann", nperseg=NFFT, noverlap=NFFT - HOP)[2]
 
 
+def to_time(X, fs, n):
+    return istft(X, fs=fs, window="hann", nperseg=NFFT, noverlap=NFFT - HOP)[1][:n]
+
+
 def steering(rel, az, el, fs):
     f = np.arange(NFFT // 2 + 1) * fs / NFFT
     a, e = np.radians(az), np.radians(el)
@@ -141,7 +145,8 @@ def db(a, b):
 
 
 # ---------------------------------------------------------------- scene
-def score(sc, seed=0):
+def score(sc, seed=0, wav_dir=None):
+    """Scores (and, with wav_dir, the audio: mic1.wav and <speaker>_<beam>.wav, one gain for all like the originals)."""
     geo, dry, n, fs = sc.geo, sc.dry, sc.geo["n"], sc.geo["fs"]
     M = len(geo["mics"])
     rel = np.array(geo["mics"]) - np.array(geo["centre"])
@@ -179,7 +184,7 @@ def score(sc, seed=0):
     X = to_stft(mix, fs)
     Xtake = to_stft(sum(take2.values()) + room_noise[:, ::-1], fs) if take2 else None
 
-    scores = {}
+    scores, audio = {}, {"mic1": mix[0]}
     for s in srcs:
         if s["kind"] != "speaker" or not s["target"]:
             continue
@@ -192,6 +197,13 @@ def score(sc, seed=0):
             beams["learned"] = mvdr(np.concatenate([X, 3 * Xtake], axis=2), d)
         for k, w in beams.items():
             scores[f"{sid}_{k}"] = db(apply(w, XT), apply(w, XR))
+            if wav_dir:
+                audio[f"{sid}_{k}"] = to_time(apply(w, X), fs, n)
+    if wav_dir:
+        os.makedirs(wav_dir, exist_ok=True)
+        scale = 0.9 / np.max(np.abs(mix))       # one gain for every file, as sim_conversation.py did
+        for k, x in audio.items():
+            sf.write(os.path.join(wav_dir, k + ".wav"), np.clip(x * scale, -1, 1), fs, subtype="PCM_16")
     info = {"pyroomacoustics": pra.__version__, "max_order": int(order), "rir_seconds": round(t_rir, 1),
             "total_seconds": round(time.time() - t0, 1), "room_noise_seed": seed}
     return scores, info
@@ -204,12 +216,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("scene", help="the page's zip, or a folder from web/tools/export_scene.js")
     ap.add_argument("--json", help="also write the Python scores here")
+    ap.add_argument("--wav-dir", help="also write the Python audio here (mic1.wav, <speaker>_<beam>.wav)")
     a = ap.parse_args(argv)
     sc = Scene(a.scene)
     name = sc.geo.get("name") or os.path.basename(a.scene)
     print(f"{name}: room {sc.geo['room']} m, RT60 {sc.geo['rt60']} s, damping {sc.geo['damping']}, "
           f"{len(sc.geo['mics'])} mics, {len(sc.geo['sources'])} sources")
-    scores, info = score(sc)
+    scores, info = score(sc, wav_dir=a.wav_dir)
     print(f"  pyroomacoustics {info['pyroomacoustics']}, image-source order {info['max_order']}, "
           f"room {info['rir_seconds']} s, total {info['total_seconds']} s\n")
     print(f"  {'score (target vs everything else)':42s} {'Python':>8s} {'page':>8s} {'diff':>7s}")

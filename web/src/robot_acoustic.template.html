@@ -14,6 +14,7 @@
   --s1: #B7710B; --s2: #17877B; --s3: #B5427A; --s4: #3E6FD0; --s5: #6E7F1A; --warn: #8A5A00; --warnbg: #FFF4D6;
   --spec0: #F4F6F9; --spec1: #2F6FB0; --spec2: #1D2733;
   --good: #1E7B45; --bad: #B3261E;
+  --goodbg: #E3F4E8; --midbg: #FFF1C9; --mid: #8A5A00; --badbg: #FDE4E1;
   --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
@@ -25,6 +26,7 @@
     --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
     --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
     --good: #5FCF86; --bad: #FF8A80;
+    --goodbg: #17331F; --midbg: #3A3115; --mid: #F2C96B; --badbg: #3D1A17;
     color-scheme: dark;
   }
 }
@@ -35,6 +37,7 @@
   --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
   --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
   --good: #5FCF86; --bad: #FF8A80;
+  --goodbg: #17331F; --midbg: #3A3115; --mid: #F2C96B; --badbg: #3D1A17;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -185,7 +188,13 @@ details.lgroup summary small { white-space: nowrap; margin-left: auto; color: va
 #scoreTable .who-a { color: var(--a); } #scoreTable .who-b { color: var(--b); }
 #scoreTable th.sub { font-size: .7rem; padding-top: 4px; text-align: right; }
 #scoreTable th.pyh, #scoreTable td.pyc { background: var(--bg); }
-#scoreTable td.pyc b { font-weight: 500; }
+#scoreTable td.pyc b { font-weight: 600; }
+/* closeness of Python to the page: green < 1 dB, yellow 1-2 dB, red > 2 dB (the difference is also written out) */
+#scoreTable td.pyc.near { background: var(--goodbg); } #scoreTable td.pyc.near small { color: var(--good); }
+#scoreTable td.pyc.mid { background: var(--midbg); } #scoreTable td.pyc.mid small { color: var(--mid); }
+#scoreTable td.pyc.far { background: var(--badbg); } #scoreTable td.pyc.far small { color: var(--bad); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--soft); margin: 0; }
+.key span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; background: var(--c); border: 1px solid var(--line); }
 #scoreTable tr.orig td { background: var(--bg); }
 #scoreTable td b { font-weight: 600; }
 .dl { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
@@ -319,6 +328,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
     </div>
     <p class="hint">Each score is how much stronger a target voice is than everything else at that point, in dB. <b>The original</b> is Mic 1 alone: what one microphone hears with no processing. <b>Gain</b> is how much the processing improves on the original. +3 dB means the voice is about twice as strong relative to the noise, and +10 dB means ten times. Speakers switched to interferer are not scored.</p>
     <div class="tablewrap"><table id="scoreTable"></table></div>
+    <p class="key" id="scoreKey" hidden><span style="--c: var(--goodbg)">Python within 1 dB of the page</span><span style="--c: var(--midbg)">1–2 dB apart</span><span style="--c: var(--badbg)">more than 2 dB apart</span></p>
     <p class="hint" id="scoreNote"></p>
   </section>
 
@@ -1243,13 +1253,17 @@ function buildScores() {
     tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c => {
       if (c.py != null && c.v != null) { const d = Math.abs(c.v - c.py); if (!worst || d > worst.d) worst = { d, s: r.s, label: c.label }; }
       const page = `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}</td>`;
-      return hasPy ? page + `<td class="pyc">${c.py == null ? "—" : `<b>${fmt(c.py)} dB</b>`}</td>` : page;
+      if (!hasPy) return page;
+      if (c.py == null || c.v == null) return page + '<td class="pyc">—</td>';
+      const d = Math.abs(c.v - c.py), cls = d < 1 ? "near" : d <= 2 ? "mid" : "far";
+      return page + `<td class="pyc ${cls}"><b>${fmt(c.py)} dB</b><small>${d < 0.05 ? "same" : d.toFixed(1) + " dB apart"}</small></td>`;
     }).join("");
     tb.appendChild(tr);
   }
   if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length * sub + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
+  $("scoreKey").hidden = !hasPy;
   $("scoreNote").textContent = hasPy
-    ? `Python column: an independent check of this exact scene (its default settings). python/score_scene.py rebuilds it from the page's own sources and positions with pyroomacoustics, a fuller room model, and the original Python beamformer code. Largest difference here: ${worst.d.toFixed(1)} dB (${worst.label}, ${spkName(worst.s)}). Within about 1 dB, the page's quick answers can be trusted for this scene.`
+    ? `Python column: an independent check of this exact scene (its default settings). python/score_scene.py rebuilds it from the page's own sources and positions with pyroomacoustics, a fuller room model, and the original Python beamformer code. Largest difference here: ${worst.d.toFixed(1)} dB (${worst.label}, ${spkName(worst.s)}). Green means the page's quick answer can be trusted; red means trust the Python number more.`
     : PY_SCORES[pyKey(RP)] ? "Python column hidden: you changed this scene from its default settings, and the stored Python check is for the defaults. Click the scene card again to reset it, or download the zip and run python/score_scene.py on it to check your version."
     : "No Python check for this scene yet. Download the zip and run python/score_scene.py on it.";
   $("dlAll").disabled = false;
@@ -1298,29 +1312,29 @@ function fetchRaw(path) {
   const tryUrl = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
   return tryUrl("audio/" + path).catch(() => tryUrl("../" + path)).then(b => new Uint8Array(b)).catch(() => null);
 }
-// Which classic test (Custom) each Python group belongs to. Groups not listed are reference material for the Custom
-// scene as a whole (clean voices, robot noises one at a time, and sim_8mic_robot_noise.py, which uses other talkers).
-const PY_SCENE = { "Conversation: baby crying": "baby", "Conversation: baby + fan": "fan", "Conversation: baby + robot moving (with footsteps)": "robot" };
+// Each Python group carries the scene it belongs to (build.py): a scenario id, a classic-test preset id, or "custom" for
+// reference material shown with every classic test (clean voices, robot noises, sim_8mic_robot_noise.py scenes).
 const PY_EXTRA = { "Robot noise scenes (sim_8mic_robot_noise.py)": "Different talkers (two CMU Arctic speech clips), not this page's voices." };
 let pyShown = null;
 function syncPyList() {
-  const custom = sceneId === "custom", key = custom ? "custom:" + presetId : sceneId, match = presetMatches();
-  $("pyList").hidden = !custom;
-  const name = custom ? "" : ((haveScenes() && SCENARIOS[sceneId] && SCENARIOS[sceneId].label) || SCENE_LABELS[sceneId] || sceneId);
-  const pr = PRESETS.find(x => x.id === presetId), has = Object.values(PY_SCENE).includes(presetId);
-  $("pyNote").textContent = !custom
-    ? `Python scores for the ${name} scene are in the Scores table (Python column). Python audio recordings exist only for the classic tests: pick Custom (classic tests) to listen to them.`
-    : (has ? `Made with pyroomacoustics for the classic tests. The group for “${pr.label}” is opened${match ? "" : " (your settings differ from it now)"}.`
-      : `Made with pyroomacoustics for the classic tests. Python has no recording of “${pr.label}”.`)
-      + (presetId === "robot" ? " Python's robot scene has footsteps on; the page's Robot moving has them off." : "");
+  const custom = sceneId === "custom", want = custom ? presetId : sceneId, key = custom ? "custom:" + presetId : sceneId, match = presetMatches();
+  const boxes = [...$("pyList").children];
+  for (const box of boxes) box.hidden = !(box.dataset.scene === want || (custom && box.dataset.scene === "custom"));
+  const has = boxes.some(b => b.dataset.scene === want);
+  const name = custom ? (PRESETS.find(x => x.id === presetId) || {}).label : ((haveScenes() && SCENARIOS[sceneId] && SCENARIOS[sceneId].label) || SCENE_LABELS[sceneId] || sceneId);
+  $("pyNote").textContent = (has
+    ? `The same scene simulated in Python with pyroomacoustics, for comparison with the page's version. The “${name}” group is opened.${match ? "" : " These are for the default settings; yours differ now."}`
+    : `Python has no recording of “${name}”.`)
+    + (custom && presetId === "robot" ? " Python's robot scene has footsteps on; the page's Robot moving has them off." : "")
+    + (custom ? "" : " Speaker 1 and 2 are the scene's default speakers; the MVDR rows match the Python column in the Scores table.");
   if (pyShown === key) return;           // only re-open groups when the scene changes, not on every knob move
   pyShown = key;
-  for (const box of $("pyList").children) box.open = custom && PY_SCENE[box.dataset.title] === presetId;
+  for (const box of boxes) box.open = box.dataset.scene === want;
 }
 function buildPyList() {
   const root = $("pyList");
   for (const grp of PY_FILES) {
-    const box = document.createElement("details"); box.className = "lgroup"; box.dataset.title = grp.title;
+    const box = document.createElement("details"); box.className = "lgroup"; box.dataset.title = grp.title; box.dataset.scene = grp.scene;
     const h = document.createElement("summary"); h.innerHTML = `<h3></h3><small>${grp.files.length} files</small>`; h.querySelector("h3").textContent = grp.title; box.appendChild(h);
     if (PY_EXTRA[grp.title]) { const n = document.createElement("p"); n.className = "hint"; n.textContent = PY_EXTRA[grp.title]; box.appendChild(n); }
     const ol = document.createElement("ol"); ol.className = "tracks"; box.appendChild(ol);
