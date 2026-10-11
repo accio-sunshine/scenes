@@ -52,14 +52,14 @@ h3 { font-size: .72rem; margin: 0; font-weight: 600; text-transform: uppercase; 
 .foot { color: var(--soft); font-size: .78rem; margin: 0; padding-inline: 2px; }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
 /* header bar: name + scene selector */
-.apphead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-block: 18px 2px; }
+/* header: name left, intro right; scene tabs + description in their own row above the array view */
+.apphead { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr); align-items: start; gap: 10px 32px; padding-block: 20px 4px; }
+@media (max-width: 880px) { .apphead { grid-template-columns: minmax(0, 1fr); } }
+.scenerow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 24px; align-items: center; }
+@media (max-width: 880px) { .scenerow { grid-template-columns: minmax(0, 1fr); } }
 .apphead .brand { display: grid; gap: 2px; min-width: 0; }
 .apphead .brand .lead { font-size: .9rem; }
-/* intro (left) and the selected scene (right) share one row, so the space under the scene tabs is used */
-.introrow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px 32px; align-items: start; }
-@media (max-width: 880px) { .introrow { grid-template-columns: minmax(0, 1fr); } }
 .intro { margin: 0; color: var(--ink); font-size: .92rem; }
-.scenebar { display: grid; gap: 8px; min-width: 0; }
 .sceneinfo { display: grid; gap: 8px; border-left: 2px solid var(--mic); padding-left: 14px; min-width: 0; }
 #customBox { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 #customBox[hidden] { display: none; }
@@ -268,19 +268,18 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
       <h1 id="h-title">Scene Simulator</h1>
       <p class="lead">Listening tests for a robot's microphone array</p>
     </div>
-    <div class="scenebar">
-      <div class="cards" id="cards" role="group" aria-label="Scene"></div>
-    </div>
+    <p class="intro">Build a scene around the robot's head (a room, up to five people and the noise of the place), then hear it the way its microphones do. The page measures how well each beamformer picks out every speaker, and checks those numbers against a fuller Python simulation of the same scene.</p>
   </header>
-  <div class="introrow">
-  <p class="intro">Build a scene around the robot's head (a room, up to five people and the noise of the place), then hear it the way its microphones do. The page measures how well each beamformer picks out every speaker, and checks those numbers against a fuller Python simulation of the same scene.</p>
-  <div id="sceneInfo" class="sceneinfo">
-    <p class="hint" id="sceneNote" aria-live="polite"></p>
-    <div id="customBox" hidden>
-      <div class="row" id="presets" role="group" aria-label="Classic test scenes"></div>
-      <p class="hint" id="presetNote"></p>
+
+  <div class="scenerow">
+    <div class="cards" id="cards" role="group" aria-label="Scene"></div>
+    <div id="sceneInfo" class="sceneinfo">
+      <p class="hint" id="sceneNote" aria-live="polite"></p>
+      <div id="customBox" hidden>
+        <div class="row" id="presets" role="group" aria-label="Classic test scenes"></div>
+        <p class="hint" id="presetNote"></p>
+      </div>
     </div>
-  </div>
   </div>
 
   <section class="hearsec" aria-labelledby="h-head">
