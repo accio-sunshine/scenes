@@ -118,39 +118,39 @@
   },
   "baby": {
    "scores": {
-    "mic_s1": -0.99,
-    "s1_das": -0.04,
-    "s1_mvdr": 4.69,
-    "mic_s2": -0.99,
-    "s2_das": 0.2,
-    "s2_mvdr": 5.27
+    "mic_s1": -1.0,
+    "s1_das": -0.1,
+    "s1_mvdr": 4.62,
+    "mic_s2": -0.98,
+    "s2_das": 0.17,
+    "s2_mvdr": 5.25
    },
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 66,
-    "rir_seconds": 1.9,
-    "total_seconds": 2.4,
+    "rir_seconds": 2.2,
+    "total_seconds": 2.7,
     "room_noise_seed": 0
    },
    "page_at_run": {
     "mic_s1": -0.98,
-    "mic_s2": -0.99,
-    "s1_das": -0.22,
-    "s1_mvdr": 4.45,
-    "s2_das": 0.37,
-    "s2_mvdr": 5.38
+    "mic_s2": -0.98,
+    "s1_das": -0.26,
+    "s1_mvdr": 4.44,
+    "s2_das": 0.33,
+    "s2_mvdr": 5.4
    }
   },
   "fan": {
    "scores": {
     "mic_s1": -1.78,
-    "s1_das": -1.07,
-    "s1_mvdr": 4.56,
-    "s1_learned": 4.9,
+    "s1_das": -1.11,
+    "s1_mvdr": 4.49,
+    "s1_learned": 4.82,
     "mic_s2": -1.79,
-    "s2_das": -1.45,
-    "s2_mvdr": 5.03,
-    "s2_learned": 4.69
+    "s2_das": -1.47,
+    "s2_mvdr": 5.0,
+    "s2_learned": 4.67
    },
    "info": {
     "pyroomacoustics": "0.10.1",
@@ -160,43 +160,43 @@
     "room_noise_seed": 0
    },
    "page_at_run": {
-    "mic_s1": -1.79,
-    "mic_s2": -1.8,
-    "s1_das": -1.23,
+    "mic_s1": -1.8,
+    "mic_s2": -1.81,
+    "s1_das": -1.25,
     "s1_mvdr": 4.31,
-    "s1_learned": 4.65,
-    "s2_das": -1.29,
-    "s2_mvdr": 4.98,
-    "s2_learned": 4.84
+    "s1_learned": 4.64,
+    "s2_das": -1.31,
+    "s2_mvdr": 5.01,
+    "s2_learned": 4.87
    }
   },
   "robot": {
    "scores": {
     "mic_s1": -3.35,
-    "s1_das": -1.37,
-    "s1_mvdr": 4.38,
-    "s1_learned": 4.61,
-    "mic_s2": -3.36,
-    "s2_das": -1.67,
-    "s2_mvdr": 4.86,
-    "s2_learned": 4.43
+    "s1_das": -1.41,
+    "s1_mvdr": 4.32,
+    "s1_learned": 4.57,
+    "mic_s2": -3.35,
+    "s2_das": -1.69,
+    "s2_mvdr": 4.82,
+    "s2_learned": 4.39
    },
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 66,
-    "rir_seconds": 3.4,
-    "total_seconds": 4.4,
+    "rir_seconds": 3.3,
+    "total_seconds": 4.2,
     "room_noise_seed": 0
    },
    "page_at_run": {
-    "mic_s1": -3.35,
+    "mic_s1": -3.36,
     "mic_s2": -3.36,
-    "s1_das": -1.52,
-    "s1_mvdr": 4.15,
-    "s1_learned": 4.45,
-    "s2_das": -1.52,
+    "s1_das": -1.54,
+    "s1_mvdr": 4.18,
+    "s1_learned": 4.48,
+    "s2_das": -1.54,
     "s2_mvdr": 4.79,
-    "s2_learned": 4.57
+    "s2_learned": 4.56
    }
   },
   "quiet": {
@@ -211,7 +211,7 @@
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 66,
-    "rir_seconds": 1.2,
+    "rir_seconds": 1.1,
     "total_seconds": 1.9,
     "room_noise_seed": 0
    },

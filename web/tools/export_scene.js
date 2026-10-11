@@ -8,8 +8,8 @@ const web = path.join(__dirname, ".."), root = path.join(web, "..");
 const ctx = { console, Math, Date, Float64Array, Float32Array, Uint32Array, Array, Object, JSON, Number, String, Set };
 vm.createContext(ctx);
 vm.runInContext(["engine.js", "scenarios.js"].map(f => fs.readFileSync(path.join(web, "src", f), "utf8")).join("\n") +
-  "\n;globalThis.__x = { render, readWav, SCENARIOS };", ctx);
-const { render, readWav, SCENARIOS } = ctx.__x;
+  "\n;globalThis.__x = { render, readWav, normalizeParams, SCENARIOS };", ctx);
+const { render, readWav, normalizeParams, SCENARIOS } = ctx.__x;
 
 const DEF = { rt60: 0.5, radius: 5, roomDb: 25, manAng: 40, womanAng: 150, dist: 1.5, babyOn: true, babyAng: 250, babyDist: 2.5, babyDb: -6,
   fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8, footstepsOn: false, footstepsDb: -2,
@@ -19,7 +19,11 @@ const PRESETS = { baby: OFF, fan: { ...OFF, fanOn: true, humOn: true }, robot: {
 
 function paramsFor(scene) {
   if (SCENARIOS[scene]) return JSON.parse(JSON.stringify(SCENARIOS[scene].params));
-  if (PRESETS[scene]) return { ...DEF, ...PRESETS[scene], scenario: "custom" };
+  if (PRESETS[scene]) {   // as the page builds a classic test: legacy settings -> explicit speaker list (schema 2)
+    const n = normalizeParams({ ...DEF, ...PRESETS[scene], scenario: "custom" });
+    delete n._legacy; delete n._warnings;
+    return { ...n, noises: [] };
+  }
   throw new Error(`unknown scene '${scene}' (scenarios: ${Object.keys(SCENARIOS).join(", ")}; classic tests: ${Object.keys(PRESETS).join(", ")})`);
 }
 function wavF32(x, rate = 16000) {
