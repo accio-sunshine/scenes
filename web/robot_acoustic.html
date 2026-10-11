@@ -55,10 +55,12 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 .apphead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-block: 18px 2px; }
 .apphead .brand { display: grid; gap: 2px; min-width: 0; }
 .apphead .brand .lead { font-size: .9rem; }
-.intro { margin: 0; max-width: 78ch; color: var(--ink); font-size: .92rem; }
+/* intro (left) and the selected scene (right) share one row, so the space under the scene tabs is used */
+.introrow { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px 32px; align-items: start; }
+@media (max-width: 880px) { .introrow { grid-template-columns: minmax(0, 1fr); } }
+.intro { margin: 0; color: var(--ink); font-size: .92rem; }
 .scenebar { display: grid; gap: 8px; min-width: 0; }
-.sceneinfo { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; justify-content: space-between; margin-top: -4px; }
-.sceneinfo .hint { max-width: 80ch; }
+.sceneinfo { display: grid; gap: 8px; border-left: 2px solid var(--mic); padding-left: 14px; min-width: 0; }
 #customBox { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
 #customBox[hidden] { display: none; }
 .lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
@@ -270,6 +272,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
       <div class="cards" id="cards" role="group" aria-label="Scene"></div>
     </div>
   </header>
+  <div class="introrow">
   <p class="intro">Build a scene around the robot's head (a room, up to five people and the noise of the place), then hear it the way its microphones do. The page measures how well each beamformer picks out every speaker, and checks those numbers against a fuller Python simulation of the same scene.</p>
   <div id="sceneInfo" class="sceneinfo">
     <p class="hint" id="sceneNote" aria-live="polite"></p>
@@ -277,6 +280,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
       <div class="row" id="presets" role="group" aria-label="Classic test scenes"></div>
       <p class="hint" id="presetNote"></p>
     </div>
+  </div>
   </div>
 
   <section class="hearsec" aria-labelledby="h-head">
