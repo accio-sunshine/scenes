@@ -14,8 +14,8 @@
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 70,
-    "rir_seconds": 39.8,
-    "total_seconds": 40.9,
+    "rir_seconds": 36.7,
+    "total_seconds": 38.0,
     "room_noise_seed": 0
    },
    "page_at_run": {
@@ -43,8 +43,8 @@
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 64,
-    "rir_seconds": 48.4,
-    "total_seconds": 50.0,
+    "rir_seconds": 49.9,
+    "total_seconds": 51.7,
     "room_noise_seed": 0
    },
    "page_at_run": {
@@ -72,8 +72,8 @@
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 106,
-    "rir_seconds": 108.2,
-    "total_seconds": 109.5,
+    "rir_seconds": 117.4,
+    "total_seconds": 118.8,
     "room_noise_seed": 0
    },
    "page_at_run": {
@@ -101,8 +101,8 @@
    "info": {
     "pyroomacoustics": "0.10.1",
     "max_order": 42,
-    "rir_seconds": 6.8,
-    "total_seconds": 8.3,
+    "rir_seconds": 6.5,
+    "total_seconds": 7.7,
     "room_noise_seed": 0
    },
    "page_at_run": {
@@ -226,5 +226,5 @@
   }
  },
  "note": "Python cross-check (python/score_scene.py: pyroomacoustics image-source room + the original Python STFT/MPDR code) on each scene's default settings. Keys match the page's scores.",
- "updated": "2026-10-10"
+ "updated": "2026-10-11"
 }

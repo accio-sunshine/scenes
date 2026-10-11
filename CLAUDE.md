@@ -18,6 +18,8 @@ scenes/
 │   │   └── robot_acoustic.template.html  # UI template
 │   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py
 ├── voices/                       # male.wav, female.wav, baby.wav (base64'd into page)
+├── python/                       # score_scene.py (Python cross-check), make_python_scores.py
+├── python_out/<scene>/           # Python audio of the 4 scenarios (make_python_scores.py), played by the page
 └── sim_conversation_out/, sim_noise_out/   # Python-sim reference WAVs played by the page (build.py asserts them)
 ```
 
@@ -55,7 +57,8 @@ scenes/
 ### Python cross-check (2026-10-10)
 - `python/score_scene.py` rebuilds a scene from the page's dry sources + placements (zip or `web/tools/export_scene.js`
   folder) with pyroomacoustics and the original Python STFT/MPDR code. Reproduces sim_conversation.py's Baby crying /
-  Baby + fan scores within 0.1 dB. `python/make_python_scores.py` -> `web/src/python_scores.json` -> page "Python" lines.
+  Baby + fan scores within 0.1 dB. `python/make_python_scores.py` -> `web/src/python_scores.json` -> page "Python" column
+  (green < 1 dB from the page, yellow 1-2, red > 2) and `python_out/<scene>/*.wav` -> Python recordings for the 4 scenarios.
 - Agreement (MVDR, default scenes): classic tests and Factory within ~0.6 dB, Hospital ~0.9, Automobile ~1.2,
   **Home: page 1.3-2.7 dB below Python** (systematic; not damping, not the ambient sources; small-room tail model).
 - Page MVDR scores also depend on the random draw of the statistical tail: changing only the RIR seed moved Home

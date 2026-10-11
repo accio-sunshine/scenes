@@ -22,6 +22,7 @@ voices/                           male.wav, female.wav, baby.wav (embedded into 
 python/
   score_scene.py                  independent Python check of a scene (pyroomacoustics room + original MPDR code)
   make_python_scores.py           runs it on every scene's defaults -> web/src/python_scores.json (the page's "Python" lines)
+python_out/<scene>/               Python audio of the four scenarios (make_python_scores.py), played by the page
 sim_conversation_out/, sim_noise_out/   reference WAVs from the Python simulator, played in the
                                   page's "compare with Python" section (build.py checks they exist)
 ```

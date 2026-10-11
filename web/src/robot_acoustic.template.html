@@ -168,6 +168,7 @@ ol.tracks li.sel { background: var(--bg); box-shadow: inset 3px 0 0 var(--mic); 
 .play svg { width: 13px; height: 13px; }
 .lgroup { display: grid; gap: 6px; }
 .lgroup + .lgroup { margin-top: 2px; }
+.lgroup[hidden] { display: none; }
 details.lgroup { border-top: 1px solid var(--line); padding-top: 10px; }
 details.lgroup summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 details.lgroup summary::-webkit-details-marker { display: none; }
