@@ -16,7 +16,8 @@ scenes/
 │   │   ├── engine.js             # Audio engine (rooms, sources, mics, beamforming)
 │   │   ├── scenarios.js          # Home, Factory, Hospital, Automobile + noise generators
 │   │   └── robot_acoustic.template.html  # UI template
-│   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py
+│   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py,
+│                                 # ui_full.py (end-to-end: every scene/knob/button/track/download + Python column; CHROMIUM=... in cloud, ~10 min)
 ├── voices/                       # male.wav, female.wav, baby.wav (base64'd into page)
 ├── python/                       # score_scene.py (Python cross-check), make_python_scores.py
 ├── python_out/<scene>/           # Python audio of the 4 scenarios (make_python_scores.py), played by the page
