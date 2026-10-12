@@ -1,0 +1,230 @@
+{
+ "scenes": {
+  "home": {
+   "scores": {
+    "mic_s1": -4.03,
+    "s1_das": -2.49,
+    "s1_mvdr": 2.38,
+    "s1_learned": 2.41,
+    "mic_s2": -4.01,
+    "s2_das": -2.23,
+    "s2_mvdr": 2.98,
+    "s2_learned": 2.97
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 70,
+    "rir_seconds": 36.7,
+    "total_seconds": 38.0,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -4.0,
+    "mic_s2": -4.02,
+    "s1_das": -2.4,
+    "s1_mvdr": -0.34,
+    "s1_learned": -0.25,
+    "s2_das": -2.41,
+    "s2_mvdr": 1.62,
+    "s2_learned": 1.7
+   }
+  },
+  "factory": {
+   "scores": {
+    "mic_s1": -5.35,
+    "s1_das": -3.92,
+    "s1_mvdr": 3.25,
+    "s1_learned": 2.83,
+    "mic_s2": -5.36,
+    "s2_das": -3.84,
+    "s2_mvdr": 3.19,
+    "s2_learned": 2.82
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 64,
+    "rir_seconds": 49.9,
+    "total_seconds": 51.7,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -5.41,
+    "mic_s2": -5.46,
+    "s1_das": -4.02,
+    "s1_mvdr": 3.06,
+    "s1_learned": 2.73,
+    "s2_das": -4.03,
+    "s2_mvdr": 2.58,
+    "s2_learned": 2.35
+   }
+  },
+  "hospital": {
+   "scores": {
+    "mic_s1": -3.87,
+    "s1_das": -1.45,
+    "s1_mvdr": 2.84,
+    "s1_learned": 2.71,
+    "mic_s2": -3.86,
+    "s2_das": -3.18,
+    "s2_mvdr": 1.13,
+    "s2_learned": 1.52
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 106,
+    "rir_seconds": 117.4,
+    "total_seconds": 118.8,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -3.87,
+    "mic_s2": -3.85,
+    "s1_das": -1.67,
+    "s1_mvdr": 3.62,
+    "s1_learned": 3.62,
+    "s2_das": -2.84,
+    "s2_mvdr": 0.66,
+    "s2_learned": 1.18
+   }
+  },
+  "automobile": {
+   "scores": {
+    "mic_s1": -3.89,
+    "s1_das": -2.91,
+    "s1_mvdr": -0.95,
+    "s1_learned": -0.56,
+    "mic_s2": -3.88,
+    "s2_das": -2.55,
+    "s2_mvdr": -2.91,
+    "s2_learned": -2.59
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 42,
+    "rir_seconds": 6.5,
+    "total_seconds": 7.7,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -3.86,
+    "mic_s2": -3.84,
+    "s1_das": -2.86,
+    "s1_mvdr": -0.19,
+    "s1_learned": -0.09,
+    "s2_das": -2.56,
+    "s2_mvdr": -4.01,
+    "s2_learned": -3.83
+   }
+  },
+  "baby": {
+   "scores": {
+    "mic_s1": -1.0,
+    "s1_das": -0.1,
+    "s1_mvdr": 4.62,
+    "mic_s2": -0.98,
+    "s2_das": 0.17,
+    "s2_mvdr": 5.25
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 66,
+    "rir_seconds": 2.2,
+    "total_seconds": 2.7,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -0.98,
+    "mic_s2": -0.98,
+    "s1_das": -0.26,
+    "s1_mvdr": 4.44,
+    "s2_das": 0.33,
+    "s2_mvdr": 5.4
+   }
+  },
+  "fan": {
+   "scores": {
+    "mic_s1": -1.78,
+    "s1_das": -1.11,
+    "s1_mvdr": 4.49,
+    "s1_learned": 4.82,
+    "mic_s2": -1.79,
+    "s2_das": -1.47,
+    "s2_mvdr": 5.0,
+    "s2_learned": 4.67
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 66,
+    "rir_seconds": 2.2,
+    "total_seconds": 3.0,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -1.8,
+    "mic_s2": -1.81,
+    "s1_das": -1.25,
+    "s1_mvdr": 4.31,
+    "s1_learned": 4.64,
+    "s2_das": -1.31,
+    "s2_mvdr": 5.01,
+    "s2_learned": 4.87
+   }
+  },
+  "robot": {
+   "scores": {
+    "mic_s1": -3.35,
+    "s1_das": -1.41,
+    "s1_mvdr": 4.32,
+    "s1_learned": 4.57,
+    "mic_s2": -3.35,
+    "s2_das": -1.69,
+    "s2_mvdr": 4.82,
+    "s2_learned": 4.39
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 66,
+    "rir_seconds": 3.3,
+    "total_seconds": 4.2,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -3.36,
+    "mic_s2": -3.36,
+    "s1_das": -1.54,
+    "s1_mvdr": 4.18,
+    "s1_learned": 4.48,
+    "s2_das": -1.54,
+    "s2_mvdr": 4.79,
+    "s2_learned": 4.56
+   }
+  },
+  "quiet": {
+   "scores": {
+    "mic_s1": -0.01,
+    "s1_das": 0.23,
+    "s1_mvdr": 5.04,
+    "mic_s2": -0.01,
+    "s2_das": 0.56,
+    "s2_mvdr": 5.77
+   },
+   "info": {
+    "pyroomacoustics": "0.10.1",
+    "max_order": 66,
+    "rir_seconds": 1.1,
+    "total_seconds": 1.9,
+    "room_noise_seed": 0
+   },
+   "page_at_run": {
+    "mic_s1": -0.01,
+    "mic_s2": -0.01,
+    "s1_das": 0.11,
+    "s1_mvdr": 4.86,
+    "s2_das": 0.75,
+    "s2_mvdr": 5.87
+   }
+  }
+ },
+ "note": "Python cross-check (python/score_scene.py: pyroomacoustics image-source room + the original Python STFT/MPDR code) on each scene's default settings. Keys match the page's scores.",
+ "updated": "2026-10-11"
+}

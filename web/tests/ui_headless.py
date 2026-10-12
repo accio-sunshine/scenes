@@ -29,7 +29,8 @@ with sync_playwright() as p:
     res["speakers_after_6_adds"] = pg.eval_on_selector_all(".spk", "e=>e.length"); res["refusal"] = pg.inner_text("#status")
     pg.select_option("#k_micCount", "16"); res["warn16"] = pg.inner_text("#micWarn") if pg.is_visible("#micWarn") else None
     res["mics_drawn"] = pg.eval_on_selector_all("#head .mic", "e=>e.length")
-    rendered(); res["mics_in_res"] = pg.evaluate("__ui.RES.mics.length")
+    rendered(); res["mics_in_res"] = pg.evaluate("__ui.RES.mics.length"); res["micPositions_in_res"] = pg.evaluate("__ui.RES.micPositions.length")
+    res["hears"] = pg.inner_text("#hears")
     pg.select_option("#k_micCount", "8"); res["warn8_visible"] = pg.is_visible("#micWarn")
     pg.screenshot(path=os.path.join(out, "ui_1400.png"), full_page=True)
     pg.focus("#k_roomL"); pg.keyboard.press("ArrowRight"); res["kbd_roomL"] = pg.evaluate("__ui.P.roomL")

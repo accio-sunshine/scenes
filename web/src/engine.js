@@ -144,7 +144,7 @@ function normalizeParams(p0) {
   };
   p.schema = 2;
   p.scenario = ["home", "factory", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
-  num("roomL", 6, 2, 30); num("roomW", 5, 2, 30); num("roomH", 3, 2, 8);
+  num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
   for (const k of ROBOT_KEYS) { p[k + "On"] = !!p[k + "On"]; num(k + "Db", ENG_ROBOT_DB_DEF[k + "Db"]); }
@@ -296,22 +296,24 @@ function engRoomRirs(src, mics, cen, room, rt60, damping, Lr, rng) {
   const mkEnv = rt => { const e = new Float64Array(tailLen); let s = 0; for (let t = 0; t < tailLen; t++) { e[t] = Math.exp(-6.9078 * t / (rt * FS)) * Math.min(1, t / (0.01 * FS)); s += e[t] ** 2; } return [e, s]; };
   const [env, envE] = mkEnv(rt60), [envH, envEH] = damp ? mkEnv(rt60Hf) : [null, 0];
   const sigma = Math.sqrt(lateOf(alpha) / (P * envE)), sigmaH = damp ? Math.sqrt(lateOf(alphaH) / (P * envEH)) : 0;
-  const lpA = Math.exp(-2 * Math.PI * 2000 / FS);   // two-pole split near 2 kHz: low band keeps rt60, high band gets rt60Hf
+  // low/high split for damping: raised-cosine crossover 1.5-2.5 kHz applied in the frequency domain (W_L + W_H = 1).
+  // Low band keeps rt60, high band gets rt60Hf. (A time-domain 2-pole split leaked the slow low-band tail ~9 dB down
+  // into the high band, which hid the faster HF decay.)
+  const WL = damp ? new Float64Array(half + 1) : null;
+  if (damp) for (let k = 0; k <= half; k++) { const f = k * FS / L2; WL[k] = f <= 1500 ? 1 : f >= 2500 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * (f - 1500) / 1000); }
   const Tr = mics.map(() => new Float64Array(L2)), Ti = mics.map(() => new Float64Array(L2));
-  const nr = new Float64Array(L2), ni = new Float64Array(L2);
+  const nr = new Float64Array(L2), ni = new Float64Array(L2), hr = damp ? new Float64Array(L2) : null, hi = damp ? new Float64Array(L2) : null;
   for (let p = 0; p < P; p++) {
     const z = 2 * rng.u() - 1, phi = 2 * Math.PI * rng.u(), s = Math.sqrt(1 - z * z);
     const u = [s * Math.cos(phi), s * Math.sin(phi), z];
     nr.fill(0); ni.fill(0);
-    if (!damp) for (let t = 0; t < tailLen; t++) nr[t] = sigma * env[t] * rng.g();
+    if (!damp) { for (let t = 0; t < tailLen; t++) nr[t] = sigma * env[t] * rng.g(); fft(nr, ni, false); }
     else {
-      let l1 = 0, lp = 0;   // two cascaded one-poles (12 dB/oct) so the low band leaks little into the high band
-      for (let t = 0; t < tailLen; t++) {
-        const g = rng.g(); l1 = lpA * l1 + (1 - lpA) * g; lp = lpA * lp + (1 - lpA) * l1;
-        nr[t] = sigma * env[t] * lp + sigmaH * envH[t] * (g - lp);
-      }
+      hr.fill(0); hi.fill(0);
+      for (let t = 0; t < tailLen; t++) { const g = rng.g(); nr[t] = sigma * env[t] * g; hr[t] = sigmaH * envH[t] * g; }
+      fft(nr, ni, false); fft(hr, hi, false);
+      for (let k = 0; k < L2; k++) { const w = WL[Math.min(k, L2 - k)]; nr[k] = w * nr[k] + (1 - w) * hr[k]; ni[k] = w * ni[k] + (1 - w) * hi[k]; }
     }
-    fft(nr, ni, false);
     mics.forEach((m, mi) => {
       const tau = ((m[0] - cen[0]) * u[0] + (m[1] - cen[1]) * u[1] + (m[2] - cen[2]) * u[2]) / C * FS - 8;   // arrives earlier toward u
       const dl = 2 * Math.PI * tau / L2, cd = Math.cos(dl), sd = Math.sin(dl), TR = Tr[mi], TI = Ti[mi];
@@ -473,14 +475,14 @@ function accumulateCov(chs, Rr, Ri, weight) {
   }
 }
 
-// SRP-PHAT over azimuth x elevation on the mixture covariance. grid[az] = max over elevation, elBest[az] = the argmax.
-// For a PLANAR ring the delays depend only on cos(el), so el and -el are indistinguishable (elevation is ambiguous in
-// sign and weakly resolved in size); for a planar array we search el = 0..90 only and report el >= 0. A source straight
-// above (el 90) gives zero delays at every azimuth, so its azimuth is undefined and the az grid is flat there.
-// A dual ring has a vertical baseline (ringGap), so the sign of el is resolved, but only coarsely for a few cm of gap.
+// SRP-PHAT on the mixture covariance. grid[az] = the azimuth map peaks are picked on (see below).
+// For a PLANAR ring the delays depend only on cos(el): el and -el are indistinguishable and the size of el is only seen
+// as a shrink of all delays, which reverberation mimics (in tests in-plane talkers came out 45-90 deg "up"). So a planar
+// ring reports el = null (unknown). A source straight above gives zero delays at every azimuth: its azimuth is undefined.
+// A dual ring has a vertical baseline (ringGap), so el is estimated per peak (-60..90 in 15 deg steps), coarsely.
 function engSrp(Rr, Ri, rel, nsrc) {
   const M = rel.length, planar = rel.every(r => Math.abs(r[2] - rel[0][2]) < 1e-9);
-  const els = planar ? [0, 15, 30, 45, 60, 75, 90] : [-60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
+  const els = planar ? [0] : [-60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];
   const kLo = Math.ceil(300 * NFFT / FS), kHi = Math.floor(3500 * NFFT / FS), nk = kHi - kLo + 1;
   const pi = [], pj = [];
   for (let i = 0; i < M; i++) for (let j = i + 1; j < M; j++) { pi.push(i); pj.push(j); }
@@ -489,8 +491,11 @@ function engSrp(Rr, Ri, rel, nsrc) {
     const idx = k * M * M + pi[q] * M + pj[q], rr = Rr[idx], ri = Ri[idx], mag = Math.hypot(rr, ri) || 1;
     ar[q * nk + k - kLo] = rr / mag; ai[q * nk + k - kLo] = ri / mag;
   }
-  const dw = 2 * Math.PI * (FS / NFFT) / C, grid = new Float64Array(360).fill(-Infinity), elBest = new Float64Array(360);
-  for (const el of els) {
+  // Azimuth peaks come from the el = 0 slice (the v1 map). Taking the max over elevation first let diffuse/reverberant energy,
+  // which a small planar ring cannot place in elevation, pile up at high elevations and turned the flat zenith row into
+  // spurious plateau-edge peaks. Elevation is then estimated per peak, at that azimuth.
+  const dw = 2 * Math.PI * (FS / NFFT) / C, E = els.length, map = els.map(() => new Float64Array(360));
+  els.forEach((el, ei) => {
     const ce = Math.cos(el * Math.PI / 180), se = Math.sin(el * Math.PI / 180);
     for (let az = 0; az < 360; az++) {
       const u0 = ce * Math.cos(az * Math.PI / 180), u1 = ce * Math.sin(az * Math.PI / 180), u2 = se;
@@ -506,9 +511,12 @@ function engSrp(Rr, Ri, rel, nsrc) {
           const c2 = c * cd - s * sd; s = s * cd + c * sd; c = c2;
         }
       }
-      if (sum > grid[az]) { grid[az] = sum; elBest[az] = el; }
+      map[ei][az] = sum;
     }
-  }
+  });
+  // planar: the el = 0 slice. Dual ring: max over elevation (it has real elevation information, and a source well above
+  // the plane is mis-aimed in azimuth on the el = 0 slice).
+  const grid = planar ? map[0] : Float64Array.from(map[0], (_, az) => Math.max(...map.map(m => m[az])));
   let lo = Infinity, hi = -Infinity; for (const v of grid) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
   const pk = [];
   for (let g = 0; g < 360; g++) if (grid[g] >= grid[(g + 359) % 360] && grid[g] > grid[(g + 1) % 360]) pk.push(g);
@@ -521,7 +529,11 @@ function engSrp(Rr, Ri, rel, nsrc) {
       if (chosen.every(c => Math.min(Math.abs(c - g), 360 - Math.abs(c - g)) >= 15)) chosen.push(g);
     }
   }
-  return { grid: Array.from(grid, v => (v - lo) / (hi - lo || 1)), peaks: chosen.sort((a, b) => a - b).map(az => ({ az, el: elBest[az] })) };
+  const elAt = az => { if (planar) return null; let best = 0; for (let ei = 1; ei < E; ei++) if (map[ei][az] > map[best][az]) best = ei; return els[best]; };
+  let peaks = chosen.map(az => ({ az, el: elAt(az) }));
+  const zen = peaks.filter(q => q.el === 90);   // every azimuth is the same point at the zenith: keep one (the strongest)
+  if (zen.length > 1) { const keep = zen.reduce((a, b) => (map[E - 1][b.az] > map[E - 1][a.az] ? b : a)); peaks = peaks.filter(q => q.el !== 90 || q === keep); }
+  return { grid: Array.from(grid, v => (v - lo) / (hi - lo || 1)), peaks: peaks.sort((a, b) => a.az - b.az) };
 }
 
 // ---------------------------------------------------------------- the scene
@@ -560,6 +572,9 @@ function render(p0, voices, progress = () => {}) {
   const rirFor = pos => engRoomRirs(pos, mics, cen, room, p.rt60, p.damping, Lr, rirRng);
   const place = (sig, start) => { const out = new Float64Array(N), s = Math.round(start * FS); for (let i = 0; i < sig.length && s + i < N; i++) out[s + i] = sig[i]; return out; };
   const sources = [], talk = {}, solo = {}, tgt = [];   // tgt: {sid, y} target speakers with all channels
+  // dry: every source's signal before the room (for the Python cross-check); geo: where each one was placed
+  const dry = {}, geo = { fs: FS, n: N, room, centre: cen, mics, rt60: p.rt60, damping: p.damping, rt60Hf: engRt60Hf(p.rt60, p.damping),
+    roomDb: p.roomDb, learnedTakeWeight: 9, pathSegments: "raised-cosine partition of unity, 4 positions at 0, N/3, 2N/3, N", sources: [] };
   const bg = engZeros(M);
   const note = (label, pl) => { if (pl.clamped) warnings.push(label + " was outside the room and moved to stay 0.2 m inside it (now az " + pl.az.toFixed(0) + ", el " + pl.el.toFixed(0) + ", " + pl.dist.toFixed(2) + " m)."); };
 
@@ -578,6 +593,7 @@ function render(p0, voices, progress = () => {}) {
     if (i === 0) ref = energy(y[0]) || 1e-30;
     else { const e = energy(y[0]); if (e > 0) scaleAll(y, Math.sqrt(ref / e * 10 ** (s.db / 10))); }
     sources.push({ id: s.id, kind: "speaker", label, voice: s.voice, az: pl.az, el: pl.el, dist: pl.dist, clamped: pl.clamped, target: s.target });
+    dry[s.id] = sig; geo.sources.push({ id: s.id, kind: "speaker", target: s.target, db: i === 0 ? 0 : s.db, az: pl.az, el: pl.el, positions: [pl.pos] });
     solo[s.id] = y[0];
     if (s.target) tgt.push({ sid: s.id, az: pl.az, el: pl.el, y }); else addInto(bg, y);
   });
@@ -596,14 +612,18 @@ function render(p0, voices, progress = () => {}) {
     if (!(esig > 0) || !Number.isFinite(esig)) { warnings.push("Noise '" + n.label + "': generator returned silence or non-finite values, skipped."); return; }
     const p1 = engPlace(cen, room, n.az, n.el, n.dist, 0.2); note("Noise '" + n.label + "'", p1);
     let y;
+    const gsrc = { id: n.id, kind: "noise", target: false, db: n.db, positions: [p1.pos] };
+    dry[n.id] = sig; geo.sources.push(gsrc);
     if (!n.path) y = engConvolve(sig, rirFor(p1.pos), NF);
     else {
       const e1 = n.path, shortArc = ((e1.az1 - n.az + 540) % 360) - 180;
       segW = segW || engSegWeights();
       y = engZeros(M);
       let endPl = null;
+      gsrc.positions = [];
       for (let j = 0; j < 4; j++) {
         const f = j / 3, pl = engPlace(cen, room, n.az + shortArc * f, n.el + (e1.el1 - n.el) * f, n.dist + (e1.dist1 - n.dist) * f, 0.2);
+        gsrc.positions.push(pl.pos);
         if (j === 3) { endPl = pl; note("Noise '" + n.label + "' (end of path)", pl); }
         const seg = new Float64Array(N); for (let k = 0; k < N; k++) seg[k] = sig[k] * segW[j][k];
         addInto(y, engConvolve(seg, rirFor(pl.pos), NF));
@@ -620,13 +640,13 @@ function render(p0, voices, progress = () => {}) {
 
   // ---- the robot's own noises (fixed positions on the body, follow the array)
   const robotRir = {};
-  const robotTake = (seed, keepSolo) => {
+  const robotTake = (seed, keepSolo, dryKey) => {
     const sigs = robotSignals(p, seed), total = engZeros(M);
     for (const k of ROBOT_KEYS) {
       if (!p[k + "On"]) continue;
       let y;
-      if (k === "hum") { const h = sigs.hum(); y = Array.from({ length: M }, () => h.slice()); }
-      else { robotRir[k] = robotRir[k] || rirFor(engRobotPlace(cen, room, k).pos); y = engConvolve(sigs[k](), robotRir[k], NF); }
+      if (k === "hum") { const h = sigs.hum(); dry[dryKey(k)] = h; y = Array.from({ length: M }, () => h.slice()); }
+      else { robotRir[k] = robotRir[k] || rirFor(engRobotPlace(cen, room, k).pos); const d = sigs[k](); dry[dryKey(k)] = d; y = engConvolve(d, robotRir[k], NF); }
       const e = energy(y[0]);
       if (e > 0) scaleAll(y, Math.sqrt(ref / e * 10 ** (p[k + "Db"] / 10)));
       addInto(total, y);
@@ -635,7 +655,9 @@ function render(p0, voices, progress = () => {}) {
     return { total, ms: sigs.ms };
   };
   progress("Running the robot's motors");
-  const robot = robotTake(1, true);
+  const robot = robotTake(1, true, k => "robot_" + k);
+  for (const k of ROBOT_KEYS) if (p[k + "On"]) geo.sources.push({ id: "robot_" + k, kind: "robot", target: false, db: p[k + "Db"], sameOnAllMics: k === "hum",
+    positions: k === "hum" ? [] : [engRobotPlace(cen, room, k).pos], learnedTake: "robot_" + k + "_take2" });
   addInto(bg, robot.total);
   for (const k of ROBOT_KEYS) if (p[k + "On"]) {
     if (k === "hum") sources.push({ id: "hum", kind: "robot", label: ENG_ROBOT_LABEL.hum, az: 0, el: 0, dist: 0, clamped: false });
@@ -658,7 +680,7 @@ function render(p0, voices, progress = () => {}) {
   accumulateCov(mix, Rr, Ri, 1 / NFR);
   let LRr = Rr, LRi = Ri;
   if (anyRobot) {
-    const take = robotTake(99, false).total;
+    const take = robotTake(99, false, k => "robot_" + k + "_take2").total;
     for (let m = 0; m < M; m++) for (let i = 0; i < N; i++) take[m][i] += roomNoise[m][N - 1 - i];
     const Tr = new Float64Array(MM), Ti = new Float64Array(MM);
     accumulateCov(take, Tr, Ti, 1);
@@ -713,6 +735,8 @@ function render(p0, voices, progress = () => {}) {
     mics: mix.map(c => f32(c)), tracks, solos, scores, srp, sources, talk, warnings,
     motor: { fan: ds(ms.fan), neck: ds(ms.neck), sh: ds(ms.sh), walk: ds(ms.walk) },
     room: { L: room[0], W: room[1], H: room[2], rt60: p.rt60, rt60Hf: engRt60Hf(p.rt60, p.damping), volume: V, damping: p.damping },
+    micPositions: rel.map(r => r.map(v => Math.round(v * 1e5) / 1e5)),   // metres from the array centre, mic 1 first (x = az 0, z up)
+    dry: Object.fromEntries(Object.entries(dry).map(([k, v]) => [k, Float32Array.from(v)])), geometry: geo,
     ms: Date.now() - t0,
   };
 }
@@ -756,7 +780,7 @@ if (typeof self !== "undefined" && typeof window === "undefined" && typeof modul
     if (voiceBufs) voices = { male: readWav(voiceBufs.male, true).x, female: readWav(voiceBufs.female, true).x, baby: readWav(voiceBufs.baby, false).x };
     try {
       const res = render(params, voices, msg => self.postMessage({ id, progress: msg }));
-      const transfer = [...res.mics.map(a => a.buffer), ...Object.values(res.tracks).map(a => a.buffer), ...Object.values(res.solos).map(a => a.buffer)];
+      const transfer = [...res.mics.map(a => a.buffer), ...Object.values(res.tracks).map(a => a.buffer), ...Object.values(res.solos).map(a => a.buffer), ...Object.values(res.dry).map(a => a.buffer)];
       self.postMessage({ id, res }, transfer);
     } catch (err) { self.postMessage({ id, error: String(err && err.stack || err) }); }
   };

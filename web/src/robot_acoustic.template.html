@@ -3,67 +3,75 @@
 <title>Scene Simulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-/* Layout: the robot's head at the centre of its own world on the left, its knobs on the right,
-   then a full-width viewer (timeline, waveform, spectrogram) and the lists of things to hear. */
+/* Layout: instrument workbench. Header bar with the scene selector, then full-width panels: array view + readouts,
+   setup (two columns), scores, signal viewer, track lists. Cool steel neutrals, one signal-blue accent, square-ish controls. */
 :root {
-  --bg: #EEF1F4; --panel: #FFFFFF; --ink: #1D2733; --soft: #5B6876; --line: #D3DAE2; --head: #E2E7ED;
-  --mic: #2F6FB0; --micoff: #B9C3CE; --a: #C8891A; --b: #2A8C82; --baby: #B5527A;
+  --bg: #F2F4F6; --panel: #FFFFFF; --ink: #17212B; --soft: #5D6A77; --line: #DDE2E7; --head: #E6EAEE;
+  --mic: #1F5FA6; --micoff: #B9C3CE; --a: #C8891A; --b: #2A8C82; --baby: #B5527A;
   --noise: #6A5ACD; --srp: #C0392B; --wave: #2F6FB0;
   --s1: #B7710B; --s2: #17877B; --s3: #B5427A; --s4: #3E6FD0; --s5: #6E7F1A; --warn: #8A5A00; --warnbg: #FFF4D6;
   --spec0: #F4F6F9; --spec1: #2F6FB0; --spec2: #1D2733;
   --good: #1E7B45; --bad: #B3261E;
-  --sans: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --goodbg: #E3F4E8; --midbg: #FFF1C9; --mid: #8A5A00; --badbg: #FDE4E1;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 8px; --r-sm: 5px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141A21; --panel: #1C242D; --ink: #E6EBF0; --soft: #9AA7B4; --line: #2E3946; --head: #242E39;
+    --bg: #11161C; --panel: #192028; --ink: #E4E9EE; --soft: #94A1AE; --line: #2A3440; --head: #222B35;
     --mic: #6FA6E0; --micoff: #3C4856; --a: #E0A643; --b: #4DB8AC; --baby: #D9789E;
     --noise: #A397F0; --srp: #FF7A6B; --wave: #6FA6E0;
     --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
     --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
     --good: #5FCF86; --bad: #FF8A80;
+    --goodbg: #17331F; --midbg: #3A3115; --mid: #F2C96B; --badbg: #3D1A17;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #141A21; --panel: #1C242D; --ink: #E6EBF0; --soft: #9AA7B4; --line: #2E3946; --head: #242E39;
+  --bg: #11161C; --panel: #192028; --ink: #E4E9EE; --soft: #94A1AE; --line: #2A3440; --head: #222B35;
   --mic: #6FA6E0; --micoff: #3C4856; --a: #E0A643; --b: #4DB8AC; --baby: #D9789E;
   --noise: #A397F0; --srp: #FF7A6B; --wave: #6FA6E0;
   --s1: #E0A643; --s2: #4DB8AC; --s3: #D9789E; --s4: #8FADF2; --s5: #B5C84A; --warn: #F2C96B; --warnbg: #3A3115;
   --spec0: #161D25; --spec1: #3F7FC4; --spec2: #F2E9C8;
   --good: #5FCF86; --bad: #FF8A80;
+  --goodbg: #17331F; --midbg: #3A3115; --mid: #F2C96B; --badbg: #3D1A17;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
-main { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 56px; display: grid; gap: 20px; }
-h1 { font-size: 2rem; line-height: 1.15; margin: 0; font-weight: 700; letter-spacing: -0.01em; text-wrap: balance; }
-.lead { color: var(--soft); margin: 0; font-size: 1.02rem; }
-h2 { font-size: 1.1rem; margin: 0; font-weight: 600; }
-h3 { font-size: .8rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--soft); }
-.hint { color: var(--soft); font-size: .88rem; margin: 0; }
-section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
-.top { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 20px; align-items: stretch; }
-@media (max-width: 880px) { .top { grid-template-columns: minmax(0, 1fr); } }
-.intro { gap: 14px; }
-.intro-top { display: grid; gap: 8px; }
-.intro-top p:last-child { margin: 0; }
-.steps { list-style: none; margin: 0; padding: 0; counter-reset: st; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 880px) { .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .steps { grid-template-columns: minmax(0, 1fr); } }
-.steps li { counter-increment: st; background: var(--bg); border-radius: 10px; padding: 12px 14px 12px 48px; position: relative; display: grid; gap: 2px; align-content: start; }
-.steps li::before { content: counter(st); position: absolute; left: 14px; top: 12px; width: 24px; height: 24px; border-radius: 50%; background: var(--mic); color: #fff; font-weight: 700; font-size: .8rem; display: grid; place-items: center; }
-.steps b { font-weight: 600; }
-.steps span { color: var(--soft); font-size: .88rem; }
-.about { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
-@media (max-width: 880px) { .about { grid-template-columns: minmax(0, 1fr); } }
-.about > div { display: grid; gap: 4px; align-content: start; }
-.about p { margin: 0; color: var(--soft); font-size: .88rem; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14.5px; line-height: 1.5; }
+main { max-width: 1180px; margin: 0 auto; padding-inline: 16px; padding-block: 0 48px; display: grid; gap: 16px; }
+h1 { font-size: 1.25rem; line-height: 1.2; margin: 0; font-weight: 600; letter-spacing: 0; }
+.lead { color: var(--soft); margin: 0; font-size: .88rem; }
+h2 { font-size: .98rem; margin: 0; font-weight: 600; }
+h3 { font-size: .72rem; margin: 0; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--soft); }
+.hint { color: var(--soft); font-size: .84rem; margin: 0; }
+.foot { color: var(--soft); font-size: .78rem; margin: 0; padding-inline: 2px; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: grid; gap: 12px; min-width: 0; align-content: start; }
+/* header bar: name + scene selector */
+/* header: name left, intro right; scene tabs + description in their own row above the array view */
+.apphead { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr); align-items: start; gap: 10px 32px; padding-block: 20px 4px; }
+@media (max-width: 880px) { .apphead { grid-template-columns: minmax(0, 1fr); } }
+.scenerow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 24px; align-items: center; }
+@media (max-width: 880px) { .scenerow { grid-template-columns: minmax(0, 1fr); } }
+.apphead .brand { display: grid; gap: 2px; min-width: 0; }
+.apphead .brand .lead { font-size: .9rem; }
+.intro { margin: 0; color: var(--ink); font-size: .92rem; }
+.sceneinfo { display: grid; gap: 8px; border-left: 2px solid var(--mic); padding-left: 14px; min-width: 0; }
+#customBox { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+#customBox[hidden] { display: none; }
 .lists { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 @media (max-width: 880px) { .lists { grid-template-columns: minmax(0, 1fr); } }
+
+/* what the robot hears: top view left, readouts and controls right */
+.hear-grid { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 12px 28px; align-items: start; }
+@media (max-width: 880px) { .hear-grid { grid-template-columns: minmax(0, 1fr); } }
+.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.hear-side .legend { justify-content: flex-start; }
+.hear-side .hears { text-align: left; }
 
 /* head */
 #head { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; touch-action: none; }
@@ -82,17 +90,19 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 
 /* buttons */
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-button { font: inherit; font-size: .9rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+button { font: inherit; font-size: .86rem; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 12px; border-radius: var(--r-sm); cursor: pointer; }
 button:hover { border-color: var(--mic); }
 button:focus-visible, input:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
-button.primary { background: var(--mic); border-color: var(--mic); color: #fff; font-weight: 600; }
+button.primary { background: var(--mic); border-color: var(--mic); color: var(--panel); font-weight: 600; }
 button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
 button:disabled { opacity: .5; cursor: default; }
 
 /* knobs */
 .knobs { display: grid; gap: 16px; }
-@media (min-width: 1080px) { .knobs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; align-items: start; }
-  .kcol { display: grid; gap: 16px; align-content: start; } }
+@media (min-width: 880px) { .knobs { display: block; columns: 2; column-gap: 32px; }
+  .knobs .kgroup { break-inside: avoid; margin-bottom: 16px; }
+  .knobs .kgroup + .kgroup { border-top: 0; padding-top: 0; }
+  .kgroup { border-bottom: 1px solid var(--line); padding-bottom: 14px; } }
 .kcol { display: grid; gap: 16px; align-content: start; }
 .kgroup { display: grid; gap: 10px; }
 .kgroup + .kgroup { border-top: 1px solid var(--line); padding-top: 14px; }
@@ -137,7 +147,7 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* track lists */
 ol.tracks { list-style: none; margin: 0; padding: 0; }
-ol.tracks li { display: flex; gap: 12px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+ol.tracks li { display: flex; gap: 12px; align-items: center; padding: 8px 6px; border-top: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; }
 ol.tracks li:first-child, ol.tracks li.subrow, ol.tracks li.subrow + li { border-top: 0; }
 ol.tracks li.subrow { cursor: default; padding: 8px 6px 0; }
 ol.tracks li.subrow:hover { background: none; }
@@ -154,10 +164,11 @@ ol.tracks li.sel { background: var(--bg); box-shadow: inset 3px 0 0 var(--mic); 
 .score { flex: 0 0 72px; text-align: right; font-size: .82rem; color: var(--soft); font-variant-numeric: tabular-nums; line-height: 1.3; }
 .score b { color: var(--ink); font-weight: 600; font-size: .95rem; }
 .score .py { display: block; font-family: var(--mono); font-size: .74rem; }
-.play { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+.play { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
 .play svg { width: 13px; height: 13px; }
 .lgroup { display: grid; gap: 6px; }
 .lgroup + .lgroup { margin-top: 2px; }
+.lgroup[hidden] { display: none; }
 details.lgroup { border-top: 1px solid var(--line); padding-top: 10px; }
 details.lgroup summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 details.lgroup summary::-webkit-details-marker { display: none; }
@@ -176,10 +187,18 @@ details.lgroup summary small { white-space: nowrap; margin-left: auto; color: va
 #scoreTable col.c-proc { width: 28%; }
 #scoreTable .g { border-left: 1px solid var(--line); }
 #scoreTable .who-a { color: var(--a); } #scoreTable .who-b { color: var(--b); }
-#scoreTable td.py { color: var(--soft); font-family: var(--mono); font-size: .82rem; }
+#scoreTable th.sub { font-size: .7rem; padding-top: 4px; text-align: right; }
+#scoreTable th.pyh, #scoreTable td.pyc { background: var(--bg); }
+#scoreTable td.pyc b { font-weight: 600; }
+/* closeness of Python to the page: green < 1 dB, yellow 1-2 dB, red > 2 dB (the difference is also written out) */
+#scoreTable td.pyc.near { background: var(--goodbg); } #scoreTable td.pyc.near small { color: var(--good); }
+#scoreTable td.pyc.mid { background: var(--midbg); } #scoreTable td.pyc.mid small { color: var(--mid); }
+#scoreTable td.pyc.far { background: var(--badbg); } #scoreTable td.pyc.far small { color: var(--bad); }
+.key { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .84rem; color: var(--soft); margin: 0; }
+.key span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -2px; background: var(--c); border: 1px solid var(--line); }
 #scoreTable tr.orig td { background: var(--bg); }
 #scoreTable td b { font-weight: 600; }
-.dl { flex: 0 0 auto; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; }
+.dl { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; }
 .dl svg { width: 14px; height: 14px; }
 .check-box { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
 .check-box summary { cursor: pointer; font-weight: 600; font-size: .92rem; }
@@ -191,13 +210,17 @@ code { font-family: var(--mono); font-size: .82em; }
 /* scene simulator v2 */
 select { font: inherit; font-size: .9rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; max-width: 100%; }
 select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
-.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-@media (max-width: 880px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 480px) { .cards { grid-template-columns: minmax(0, 1fr); } }
-.card { display: grid; gap: 4px; align-content: start; text-align: left; border-radius: 12px; padding: 12px 14px; background: var(--bg); min-width: 0; }
+.cards { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); overflow: hidden; width: max-content; max-width: 100%; }
+.card { border: 0; border-radius: 0; border-left: 1px solid var(--line); padding: 7px 16px; background: transparent; min-width: 0; font-weight: 500; }
+.card:first-child { border-left: 0; }
+@media (max-width: 560px) {   /* phones: the segmented bar wraps into separate buttons */
+  .cards { width: auto; border: 0; background: none; overflow: visible; gap: 6px; }
+  .card, .card:first-child { border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); }
+}
 .card b { font-size: 1rem; }
 .card span { color: var(--soft); font-size: .82rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.card[aria-pressed="true"] { background: var(--panel); color: var(--ink); border: 2px solid var(--mic); box-shadow: inset 0 0 0 1px var(--mic); }
+.card[aria-pressed="true"] { background: var(--mic); color: var(--panel); }
+.card b { font-weight: 500; font-size: .88rem; }
 .card[aria-pressed="true"] span { color: var(--soft); }
 .card:disabled { opacity: .5; }
 .callout { border-left: 5px solid var(--warn); background: var(--warnbg); color: var(--ink); border-radius: 8px; padding: 8px 12px; font-size: .88rem; margin: 0; }
@@ -211,7 +234,7 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .ent:focus-visible .shape { stroke: var(--ink); stroke-width: 3.5; }
 .viewtitle { margin: 4px 0 0; text-align: center; }
 .legend .dia::before { border-radius: 0; transform: rotate(45deg); width: 9px; height: 9px; }
-.spk { border: 1px solid var(--line); border-left: 5px solid var(--c); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
+.spk { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: var(--r-sm); padding: 10px 12px; display: grid; gap: 8px; min-width: 0; }
 .spk:focus { outline: none; }
 .spk:focus-visible, .spk.flash { outline: 3px solid var(--c); outline-offset: 2px; }
 .spk-h { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -229,6 +252,7 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .nsrc details[open] { display: grid; gap: 6px; }
 .tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: 0 6px; border-radius: 999px; border: 1px solid var(--noise); color: var(--noise); margin-left: 4px; white-space: nowrap; }
 .tag.clamp { border-color: var(--bad); color: var(--bad); }
+.tag[hidden] { display: none; }
 .noise .nid { font-family: var(--mono); font-size: .75rem; color: var(--soft); margin-right: 4px; }
 button.small { padding: 4px 11px; font-size: .84rem; }
 button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
@@ -239,39 +263,31 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 </style>
 
 <main>
-  <section class="intro" aria-labelledby="h-title">
-    <div class="intro-top">
+  <header class="apphead">
+    <div class="brand">
       <h1 id="h-title">Scene Simulator</h1>
-      <p class="lead">Hear a scene the way a robot with a ring of microphones on its head hears it. Pick a place (a home, a factory floor, a hospital room or a car), set the room, place up to five people anywhere around the robot, in 360 degrees and up or down, and add the noise that place brings with it. The robot's own fan, servos and electronics add noise right next to its microphones.</p>
-      <p><b>What this page is for:</b> to hear and measure how well the robot can pick out one person's voice when other people and the environment are making noise. It simulates the robot's microphones for the scene you set up, then runs the same processing as the Python scripts: direction finding (where each sound comes from) and beamforming (combining the microphones to focus on one speaker). Use it to try ideas quickly, such as a louder machine, a closer speaker, a more echoey room or more microphones, before running the full Python simulation.</p>
+      <p class="lead">Listening tests for a robot's microphone array</p>
     </div>
-    <h2>How to use it</h2>
-    <ol class="steps">
-      <li><b>Pick a scene</b><span>Home, Factory, Hospital or Automobile loads a room, people and noise sources. Custom (classic tests) has the four original test scenes.</span></li>
-      <li><b>Shape the room and the array</b><span>Under Scene setup, change the room size, echo and damping, and the number and layout of microphones.</span></li>
-      <li><b>Place people and noise</b><span>Add up to 5 speakers, set their voice, loudness and start time, and drag them in the top view. Switch noise sources on or off.</span></li>
-      <li><b>Listen to the raw mics</b><span>Press Play selected mics. Click mics on the head to choose which you hear. Use Stereo with headphones.</span></li>
-      <li><b>Compare the processing</b><span>Under Pick out each speaker, play Mic 1 alone, then the beamformers aimed at each target speaker.</span></li>
-      <li><b>Read the scores</b><span>The Scores table compares each method with the original (mic 1 alone). Click any row to see its waveform and spectrogram. Download everything as a zip.</span></li>
-    </ol>
-  </section>
+    <p class="intro">Build a scene around the robot's head (a room, up to five people and the noise of the place), then hear it the way its microphones do. The page measures how well each beamformer picks out every speaker, and checks those numbers against a fuller Python simulation of the same scene.</p>
+  </header>
 
-  <section aria-labelledby="h-scene">
-    <h2 id="h-scene">Choose a scene</h2>
-    <div class="cards" id="cards" role="group" aria-label="Scenes"></div>
-    <p class="hint" id="sceneNote" aria-live="polite"></p>
-    <div id="customBox" hidden>
-      <h3>Classic tests</h3>
-      <div class="row" id="presets" role="group" aria-label="Classic test scenes" style="margin-top: 6px"></div>
-      <p class="hint" id="presetNote" style="margin-top: 6px"></p>
+  <div class="scenerow">
+    <div class="cards" id="cards" role="group" aria-label="Scene"></div>
+    <div id="sceneInfo" class="sceneinfo">
+      <p class="hint" id="sceneNote" aria-live="polite"></p>
+      <div id="customBox" hidden>
+        <div class="row" id="presets" role="group" aria-label="Classic test scenes"></div>
+        <p class="hint" id="presetNote"></p>
+      </div>
     </div>
-  </section>
+  </div>
 
-  <div class="top">
-    <section aria-labelledby="h-head">
-      <h2 id="h-head">What the robot hears</h2>
-      <p class="hint">Top view, robot facing right (0°, counter-clockwise). Drag a speaker (circle) or a noise source (diamond); click a noise source to switch it on or off; click a microphone to include it in the mix. With a marker focused: arrow keys turn it (Shift for fine steps), + and − change the distance, Page Up and Page Down change the elevation.</p>
+  <section class="hearsec" aria-labelledby="h-head">
+    <h2 id="h-head">Array view</h2>
+    <div class="hear-grid">
       <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
+      <div class="hear-side">
+      <p class="hint" title="With a marker focused: arrow keys turn it (Shift for fine steps), + and − change distance, Page Up/Down change elevation.">Top view, 0° = robot front. Drag markers to move them; click a mic to include it in the mix.</p>
       <div class="legend" id="legend"></div>
       <p class="hears" id="hears"></p>
       <div class="callout" id="warns" role="status" hidden></div>
@@ -284,7 +300,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
       <div class="status" id="status" aria-live="polite"></div>
       <details class="check-box" id="soundCheck">
         <summary>Can't hear anything? Run the sound check</summary>
-        <p class="hint">Each button plays a one-second beep a different way. Tell Claude which ones you hear and what the line under them says.</p>
+        <p class="hint">Each button plays a one-second beep a different way.</p>
         <div class="row">
           <button id="beep1">Beep 1: audio player</button>
           <button id="beep2">Beep 2: embedded file</button>
@@ -292,21 +308,23 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
         </div>
         <p class="hint" id="beepOut" aria-live="polite"></p>
       </details>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <section aria-labelledby="h-knobs">
-      <h2 id="h-knobs">Scene setup</h2>
-      <div class="knobs" id="knobs" style="grid-template-columns: minmax(0, 1fr)"></div>
-    </section>
-  </div>
+  <section aria-labelledby="h-knobs">
+    <h2 id="h-knobs">Scene setup</h2>
+    <div class="knobs" id="knobs"></div>
+  </section>
 
   <section aria-labelledby="h-scores">
     <div class="vhead">
       <h2 id="h-scores">Scores</h2>
-      <button id="dlAll" disabled>Download all audio + scores (.zip)</button>
+      <button id="dlAll" disabled>Download .zip</button>
     </div>
-    <p class="hint">Each score is how much stronger a target voice is than everything else at that point, in dB. <b>The original</b> is Mic 1 alone: what one microphone hears with no processing. <b>Gain</b> is how much the processing improves on the original. +3 dB means the voice is about twice as strong relative to the noise, and +10 dB means ten times. Speakers switched to interferer are not scored.</p>
+    <p class="hint">Target voice vs everything else, in dB. Gain is relative to mic 1 alone.</p>
     <div class="tablewrap"><table id="scoreTable"></table></div>
+    <p class="key" id="scoreKey" hidden><span style="--c: var(--goodbg)">Python within 1 dB</span><span style="--c: var(--midbg)">1–2 dB</span><span style="--c: var(--badbg)">&gt; 2 dB</span></p>
     <p class="hint" id="scoreNote"></p>
   </section>
 
@@ -325,30 +343,29 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
         <div class="playhead" id="ph"></div>
       </div>
     </div>
-    <p class="hint">Click a row below to view it here. Click the waveform or spectrogram to play from that moment.</p>
+    <p class="hint">Click a track below to view it; click the plot to play from that point.</p>
   </section>
 
   <div class="lists">
     <section aria-labelledby="h-pick">
-      <h2 id="h-pick">Pick out each speaker</h2>
-      <p class="hint">Higher dB means a cleaner target voice. The Scores table above explains the numbers.</p>
+      <h2 id="h-pick">Tracks</h2>
+      
       <ol class="tracks" id="beamList"></ol>
-      <h3 style="margin-top: 8px">Each sound alone, at mic 1</h3>
-      <p class="hint">Normalised so you can hear its character.</p>
+      <h3 style="margin-top: 8px">Raw microphones</h3>
+      
+      <ol class="tracks grid2" id="micList"></ol>
+      <h3 style="margin-top: 8px">Each source alone, at mic 1</h3>
+      <p class="hint">Normalised.</p>
       <ol class="tracks grid2" id="soloList"></ol>
     </section>
     <section aria-labelledby="h-py">
-      <h2 id="h-py">Python recordings</h2>
-      <p class="hint">The WAV files made by <code>sim_conversation.py</code> and <code>sim_8mic_robot_noise.py</code> with pyroomacoustics for the classic test scenes (Custom). Open one to compare it with the page's version.</p>
+      <h2 id="h-py">Python reference</h2>
+      <p class="hint" id="pyNote"></p>
       <div id="pyList"></div>
     </section>
   </div>
 
-  <section class="about" aria-label="About the simulation">
-    <div><h3>How the page makes the sound</h3><p>The room is a box of the size you set, with early wall reflections plus a statistical late echo. Echo (RT60) sets how long the sound lingers; Damping makes the surfaces absorb more at high frequencies. The classic scenes use the same room (6 × 5 × 3 m), 8-mic ring, voices, robot noise recipes, levels and beamformers as the Python scripts and land within about 0.5 dB of Python in the baby and fan scenes.</p></div>
-    <div><h3>Scenario noise is synthesised</h3><p>No recorded ambience is used. The television, machines, monitors and engine are generated from simple models, so how realistic a scenario sounds is a qualitative judgement. Footsteps are approximate: the page's beamformer cancels the thump much less than Python does, so footsteps start switched off.</p></div>
-    <div><h3>Loudness levels</h3><p>Every level is loudness at mic 1 compared with Speaker 1's voice, as in the scripts' <code>LEVEL_DB</code> and <code>BABY_DB</code>. The 8-mic limit applies only downstream: the PDM Frontend-in-the-Loop pipeline needs exactly 8 microphones.</p></div>
-  </section>
+  <p class="foot">Room: image sources to 3 bounces plus a statistical late tail. All ambient noise is synthesised. Levels are at mic 1 relative to Speaker 1. Python column: pyroomacoustics check of each scene's defaults (python/score_scene.py).</p>
 </main>
 
 <script id="engine">
@@ -362,6 +379,9 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 "use strict";
 const VOICES = /*VOICES*/;
 const PY_FILES = /*PYFILES*/;
+// Python cross-check scores (python/score_scene.py, pyroomacoustics) for each scene's DEFAULT settings, keyed like
+// RES.scores: { home: {scores, info}, ..., baby: {...} (Custom classic tests by preset id) }
+const PY_SCORES = /*PYSCORES*/;
 const $ = id => document.getElementById(id);
 const clone = o => JSON.parse(JSON.stringify(o));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -383,16 +403,13 @@ const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, 
 const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
 const MIC_COUNTS = [4, 6, 8, 12, 16];
 const MAX_SPK = 5;
-// Python scores from sim_conversation.py for the matching scenes (speaker 1 = man, speaker 2 = woman)
 const PRESETS = [
-  { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still.",
-    py: { mic_s1: -1.0, mic_s2: -1.0, s1_mvdr: 4.7, s2_mvdr: 5.3 } },
-  { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum.",
-    py: { mic_s1: -1.8, mic_s2: -1.8, s1_mvdr: 4.5, s2_mvdr: 4.9, s1_learned: 4.9, s2_learned: 4.7 } },
-  { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off).", py: null },
-  { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor.", py: null },
+  { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still." },
+  { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum." },
+  { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off)." },
+  { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor." },
 ];
-const SCENE_LABELS = { home: "Home", factory: "Factory", hospital: "Hospital", automobile: "Automobile" };
+const SCENE_LABELS = { home: "Home", factory: "Factory", hospital: "Hospital", automobile: "Automobile", custom: "Custom" };
 const CUSTOM_DESC = "The four original test scenes (baby, baby + fan, robot moving, quiet room) in the 6 × 5 × 3 m room, with the Python comparison.";
 let P = clone(BASE), sceneId = "custom", presetId = "robot", arrayAuto = true, RP = null;
 const deg = v => `${Math.round(v)}°`, mtr = v => `${(+v).toFixed(2)} m`, dB = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)} dB`;
@@ -452,7 +469,8 @@ const canon = o => JSON.stringify(o, (k, v) => v && typeof v === "object" && !Ar
 function baseFor(q) { return q.scenario === "custom" ? presetP(presetId) : scenarioP(q.scenario); }
 function presetMatches(q = P) { try { return canon(q) === canon(baseFor(q)); } catch (_) { return false; } }
 const spkName = s => `Speaker ${s.id.slice(1)} (${voiceLabel(s.voice)})`;
-const pyScores = q => { const pr = q.scenario === "custom" ? PRESETS.find(x => x.id === presetId) : null; return pr && pr.py && presetMatches(q) ? pr.py : {}; };
+const pyKey = q => (q.scenario === "custom" ? presetId : q.scenario);
+const pyScores = q => { const e = PY_SCORES[pyKey(q)]; return e && presetMatches(q) ? e.scores : {}; };
 
 // ---------------------------------------------------------------- controls
 const regs = { st: [], spk: [], noi: [], rob: [] };
@@ -501,7 +519,7 @@ function onRoomChange() {
 }
 function buildStatic() {
   const st = regs.st;
-  let g = group("Room", "A box. Echo is how long sound lingers; damping is how absorbent the surfaces are at high frequencies and for early reflections.");
+  let g = group("Room", "");
   const num = (k, o) => mkRange(g, st, { id: "k_" + k, get: () => P[k], set: v => { P[k] = v; }, ...o });
   num("roomL", { label: "Length", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomW", { label: "Width", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
@@ -510,7 +528,7 @@ function buildStatic() {
   num("damping", { label: "Damping", min: 0, max: 1, step: 0.05, fmt: v => v.toFixed(2) });
   num("roomDb", { label: "Noise floor (below Speaker 1)", min: 5, max: 40, step: 1, fmt: v => `−${v} dB` });
 
-  g = group("Microphones", "The array sits at the head. Every setting here re-renders the scene.");
+  g = group("Microphones", "");
   const row = document.createElement("div"); row.className = "fieldrow"; g.appendChild(row);
   mkSelect(row, st, { id: "k_micCount", label: "Number of mics", options: MIC_COUNTS.map(n => [n, n]), get: () => P.micCount, set: v => { P.micCount = +v; }, after: syncMicOn });
   mkSelect(row, st, { id: "k_arrayShape", label: "Layout", options: [["ring", "Ring"], ["dual_ring", "Dual ring"]], get: () => P.arrayShape, set: v => { P.arrayShape = v; } });
@@ -523,14 +541,14 @@ function buildStatic() {
   num("arrayX", { label: "Array position along the length", range: () => [0.2, Math.max(0.3, P.roomL - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
   num("arrayY", { label: "Array position across the width", range: () => [0.2, Math.max(0.3, P.roomW - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
 
-  g = group("Speakers", `Up to ${MAX_SPK}. Loudness is at mic 1 relative to Speaker 1. A target is beamformed and scored; an interferer only adds sound.`, "gSpk");
+  g = group("Speakers", `Up to ${MAX_SPK}. Targets are beamformed and scored; interferers only add sound.`, "gSpk");
   const sl = document.createElement("div"); sl.className = "slist"; sl.id = "spkList"; g.appendChild(sl);
   const r2 = document.createElement("div"); r2.className = "row"; g.appendChild(r2);
   const add = document.createElement("button"); add.id = "addSpk"; add.textContent = "Add speaker"; r2.appendChild(add);
   add.addEventListener("click", addSpeaker);
 
   group("Noise sources", "", "gNoi");
-  group("Robot's own noise", "Loudness at mic 1 compared with Speaker 1's voice. Available in every scene.", "gRob");
+  group("Robot's own noise", "", "gRob");
 }
 function syncMicOn() { if (micOn.length !== P.micCount) micOn = new Array(P.micCount).fill(true); }
 
@@ -577,7 +595,7 @@ function buildNoises() {
   const oldp = box.querySelector(".hint"); if (oldp) oldp.remove();
   regs.noi.length = 0;
   const p = document.createElement("p"); p.className = "hint";
-  p.textContent = P.noises.length ? "Ambient sources of this scene. Loudness is at mic 1 compared with Speaker 1. Moving sources travel along a path during the 5.5 s." : "The Custom scenes have no ambient noise sources, only the robot's own noise below. Pick Home, Factory, Hospital or Automobile for a noisy environment.";
+  p.textContent = P.noises.length ? "Moving sources travel along their path over the 5.5 s." : "None in the classic tests.";
   box.appendChild(p);
   const list = document.createElement("div"); list.className = "slist"; list.id = "noiList"; box.appendChild(list);
   P.noises.forEach((n0, i) => {
@@ -621,10 +639,12 @@ function buildRobot() {
 function buildCards() {
   const root = $("cards"); root.textContent = "";
   const items = sceneOrder().map(id => [id, SCENARIOS[id]]).concat([["custom", { label: "Custom (classic tests)", desc: CUSTOM_DESC }]]);
-  for (const id of Object.keys(SCENE_LABELS)) if (!sceneOrder().includes(id)) items.splice(items.length - 1, 0, [id, null]);
+  for (const id of Object.keys(SCENE_LABELS)) if (id !== "custom" && !sceneOrder().includes(id)) items.splice(items.length - 1, 0, [id, null]);
   for (const [id, sc] of items) {
     const b = document.createElement("button"); b.className = "card"; b.dataset.id = id; b.id = "card_" + id;
-    b.innerHTML = `<b>${esc((sc && sc.label) || SCENE_LABELS[id] || id)}</b><span>${esc((sc && sc.desc) || "Not loaded in this build.")}</span>`;
+    // card = name only; the selected scene's description is shown below the cards (#sceneNote)
+    b.innerHTML = `<b>${esc(SCENE_LABELS[id] || (sc && sc.label) || id)}</b>`;
+    if (!sc) b.title = "Not loaded in this build.";
     b.disabled = !sc;
     b.addEventListener("click", () => loadScene(id));
     root.appendChild(b);
@@ -653,14 +673,16 @@ function syncKnobs() {
   const pr = PRESETS.find(x => x.id === presetId);
   $("presetNote").textContent = match ? pr.desc : `Changed from “${pr.label}”.`;
   const sc = sceneId !== "custom" && haveScenes() ? SCENARIOS[sceneId] : null;
-  $("sceneNote").textContent = sceneId === "custom" ? CUSTOM_DESC : ((sc && sc.desc) || "") + (match ? "" : " (Modified from the scenario defaults.)");
+  const full = sceneId === "custom" ? "Custom (classic tests)" : (sc && sc.label) || SCENE_LABELS[sceneId];
+  $("sceneNote").innerHTML = `<b>${esc(full)}:</b> ` + esc(sceneId === "custom" ? CUSTOM_DESC : ((sc && sc.desc) || "") + (match ? "" : " (Modified from the scenario defaults.)"));
   const w = $("micWarn");
   w.hidden = P.micCount === 8;
-  w.innerHTML = P.micCount === 8 ? "" : `<b>${P.micCount} microphones.</b> The PDM Frontend-in-the-Loop pipeline (hil/make_pdm.py, exp22) needs exactly 8 microphones (4 data lines × 2). A zip with ${P.micCount} mics will be rejected there with a clear message. Use 8 for that pipeline.`;
+  w.innerHTML = P.micCount === 8 ? "" : `<b>${P.micCount} mics.</b> The PDM pipeline (hil/make_pdm.py) needs exactly 8; it will reject this zip.`;
   const add = $("addSpk");
   if (add) { add.setAttribute("aria-disabled", P.speakers.length >= MAX_SPK); add.textContent = P.speakers.length >= MAX_SPK ? `Add speaker (maximum ${MAX_SPK})` : "Add speaker"; }
   const rmb = P.speakers.length <= 1; P.speakers.forEach(s => { const b = $("rm_" + s.id); if (b) b.disabled = rmb; });
   $("allOn").textContent = `All ${P.micCount} mics`;
+  if ($("pyList").children.length) syncPyList();
 }
 
 // ---------------------------------------------------------------- top view
@@ -753,7 +775,7 @@ function drawHead() {
     }
     if (rs && rs.clamped) { el("circle", { cx: x + 14, cy: y - 14, r: 7, fill: "var(--bad)" }, g); el("text", { x: x + 14, y: y - 10, "text-anchor": "middle", "font-size": 11, "font-weight": 700, fill: "#fff", "pointer-events": "none" }, g, "!"); }
     el("title", {}, g, e.label);
-    g.addEventListener("pointerdown", ev => { drag = { kind, id: o.id, vmax, x0: ev.clientX, y0: ev.clientY, moved: false }; svg.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+    g.addEventListener("pointerdown", ev => { drag = { kind, id: o.id, vmax, x0: ev.clientX, y0: ev.clientY, moved: false }; try { svg.setPointerCapture(ev.pointerId); } catch (_) { /* pointer already gone (some touch devices) */ } ev.preventDefault(); });
     g.addEventListener("keydown", ev => entKey(ev, kind, o.id));
   }
   if (fid) { const n = document.querySelector(`[data-fid="${fid}"]`); if (n && n !== document.activeElement) n.focus({ preventScroll: true }); }
@@ -904,6 +926,15 @@ function wavBytes(arr, rate = 16000) {
   v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
   v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, 2 * n, true);
   for (let i = 0; i < n; i++) v.setInt16(44 + 2 * i, Math.max(-1, Math.min(1, arr[i])) * 32767, true);
+  return new Uint8Array(b);
+}
+function wavBytesF32(arr, rate = 16000) {     // 32-bit float: dry sources can peak well above 1
+  const n = arr.length, b = new ArrayBuffer(44 + 4 * n), v = new DataView(b);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, "RIFF"); v.setUint32(4, 36 + 4 * n, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 3, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 4, true);
+  v.setUint16(32, 4, true); v.setUint16(34, 32, true); w(36, "data"); v.setUint32(40, 4 * n, true);
+  for (let i = 0; i < n; i++) v.setFloat32(44 + 4 * i, arr[i], true);
   return new Uint8Array(b);
 }
 // ---- downloads: the Claude viewer saves .zip (not .wav), so audio goes inside a zip there
@@ -1177,6 +1208,12 @@ function buildLists() {
       trackRow(bl, { key: id, file: `${id}.wav`, label, viewName: `${label}, aimed at ${nm}`, desc, score: S[id], py: py[id], badge: i + 1, color: c, get: page(RES.tracks[id]), src: "page" });
     }
   });
+  const ml = $("micList"); ml.textContent = "";
+  const ang = micAngles(RES.mics.length, q.arrayShape), dual = q.arrayShape === "dual_ring";
+  RES.mics.forEach((m, i) => {
+    const where = `${Math.round(ang[i])}°` + (dual ? (i >= RES.mics.length / 2 ? ", upper ring" : ", lower ring") : "");
+    trackRow(ml, { key: "rawmic_" + i, file: `mic${i + 1}.wav`, label: `Mic ${i + 1}`, viewName: `Mic ${i + 1} (${where}), raw`, desc: where, badge: i + 1, color: "var(--mic)", get: page(m), src: "page" });
+  });
   const sl = $("soloList"); sl.textContent = "";
   const solos = q.speakers.map((s, i) => [s.id, spkName(s), `var(--s${i + 1})`, i + 1])
     .concat(q.noises.map((n, i) => [n.id, n.label, "var(--noise)", "N" + (i + 1)]))
@@ -1197,18 +1234,30 @@ function scoreData() {
 }
 function buildScores() {
   const { cols, rows, hasPy } = scoreData(), t = $("scoreTable");
-  t.innerHTML = `<thead><tr><th class="sp">Aimed at</th>${cols.map(([, l]) => `<th class="g">${l}</th>`).join("")}</tr></thead><tbody></tbody>`;
+  // with a Python check, each method gets a Page and a Python column side by side
+  const sub = hasPy ? 2 : 1;
+  t.innerHTML = `<thead><tr><th class="sp"${hasPy ? ' rowspan="2"' : ""}>Aimed at</th>${cols.map(([, l]) => `<th class="g" colspan="${sub}">${l}</th>`).join("")}</tr>`
+    + (hasPy ? `<tr>${cols.map(() => '<th class="g sub">Page</th><th class="sub pyh">Python</th>').join("")}</tr>` : "") + `</thead><tbody></tbody>`;
   const tb = t.querySelector("tbody");
+  let worst = null;
   for (const r of rows) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c =>
-      `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}${c.py == null ? "" : `<small class="py">Python ${fmt(c.py)} dB</small>`}</td>`).join("");
+    tr.innerHTML = `<td class="sp" style="--c: var(--s${r.i + 1})"><span class="dot"></span><b>${esc(spkName(r.s))}</b></td>` + r.cells.map(c => {
+      if (c.py != null && c.v != null) { const d = Math.abs(c.v - c.py); if (!worst || d > worst.d) worst = { d, s: r.s, label: c.label }; }
+      const page = `<td class="g"><b>${fmt(c.v)} dB</b>${c.gain == null ? "" : `<small>gain ${fmt(c.gain)} dB</small>`}</td>`;
+      if (!hasPy) return page;
+      if (c.py == null || c.v == null) return page + '<td class="pyc">—</td>';
+      const d = Math.abs(c.v - c.py), cls = d < 1 ? "near" : d <= 2 ? "mid" : "far";
+      return page + `<td class="pyc ${cls}"><b>${fmt(c.py)} dB</b><small>${d < 0.05 ? "same" : d.toFixed(1) + " dB apart"}</small></td>`;
+    }).join("");
     tb.appendChild(tr);
   }
-  if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
+  if (!rows.length) tb.innerHTML = `<tr><td class="sp" colspan="${cols.length * sub + 1}">No target speaker. Switch one speaker to Target to score it.</td></tr>`;
+  $("scoreKey").hidden = !hasPy;
   $("scoreNote").textContent = hasPy
-    ? "Python lines: the same scene from sim_conversation.py (pyroomacoustics). The page's numbers should land within about 0.5 dB."
-    : "Python numbers exist only for the “Baby crying” and “Baby + fan” classic tests with their default settings (Custom scene).";
+    ? `Python: same sources and positions in pyroomacoustics (default settings). Largest difference ${worst.d.toFixed(1)} dB (${worst.label}, ${spkName(worst.s)}).`
+    : PY_SCORES[pyKey(RP)] ? "Python column hidden: settings differ from the defaults. Reselect the scene to reset, or run python/score_scene.py on the zip."
+    : "No Python check for this scene. Run python/score_scene.py on the zip.";
   $("dlAll").disabled = false;
 }
 function scoresCsv() {
@@ -1224,11 +1273,16 @@ $("dlAll").addEventListener("click", () => {
   for (const k in RES.tracks) if (k !== "mic1") files.push({ name: `beams/${k}.wav`, data: wavBytes(RES.tracks[k]) });
   for (const k in RES.solos) files.push({ name: `alone/${k}.wav`, data: wavBytes(RES.solos[k]) });
   files.push({ name: "scores.csv", data: enc.encode(scoresCsv()) });
-  files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2 }, null, 2) + "\n") });
+  files.push({ name: "settings.json", data: enc.encode(JSON.stringify({ ...RP, schema: 2, micPositions: RES.micPositions }, null, 2) + "\n") });
+  // for the Python cross-check (python/score_scene.py): resolved geometry, each source before the room, the page's scores
+  files.push({ name: "scene.json", data: enc.encode(JSON.stringify({ name: RP.scenario === "custom" ? "custom_" + presetId : RP.scenario, ...RES.geometry }, null, 1) + "\n") });
+  files.push({ name: "page_scores.json", data: enc.encode(JSON.stringify(RES.scores, null, 1) + "\n") });
+  for (const k in RES.dry) files.push({ name: `dry/${k}.wav`, data: wavBytesF32(RES.dry[k]) });
   offerFiles(`scene_simulator_${RP.scenario === "custom" ? "custom_" + (presetMatches(RP) ? presetId : "edited") : RP.scenario}.zip`, files);
 });
 function selectTrack(key) {
   const map = { ...RES.tracks }; for (const k in RES.solos) map["solo_" + k] = RES.solos[k];
+  RES.mics.forEach((m, i) => { map["rawmic_" + i] = m; });
   if (key === "mics") { showArray("mics", "Selected microphones", micDesc(), micSum(), "page"); return; }
   const li = document.querySelector(`ol.tracks li[data-key="${key}"]`);
   const k = map[key] ? key : "mic1";
@@ -1250,12 +1304,31 @@ function fetchRaw(path) {
   const tryUrl = u => fetch(u).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); });
   return tryUrl("audio/" + path).catch(() => tryUrl("../" + path)).then(b => new Uint8Array(b)).catch(() => null);
 }
+// Each Python group carries the scene it belongs to (build.py): a scenario id, a classic-test preset id, or "custom" for
+// reference material shown with every classic test (clean voices, robot noises, sim_8mic_robot_noise.py scenes).
+const PY_EXTRA = { "Robot noise scenes (sim_8mic_robot_noise.py)": "Different talkers (two CMU Arctic speech clips), not this page's voices." };
+let pyShown = null;
+function syncPyList() {
+  const custom = sceneId === "custom", want = custom ? presetId : sceneId, key = custom ? "custom:" + presetId : sceneId, match = presetMatches();
+  const boxes = [...$("pyList").children];
+  for (const box of boxes) box.hidden = !(box.dataset.scene === want || (custom && box.dataset.scene === "custom"));
+  const has = boxes.some(b => b.dataset.scene === want);
+  const name = custom ? (PRESETS.find(x => x.id === presetId) || {}).label : ((haveScenes() && SCENARIOS[sceneId] && SCENARIOS[sceneId].label) || SCENE_LABELS[sceneId] || sceneId);
+  $("pyNote").textContent = (has
+    ? `${name}, simulated in Python (pyroomacoustics).${match ? "" : " Default settings; yours differ."}`
+    : `Python has no recording of “${name}”.`)
+    + (custom && presetId === "robot" ? " Python's robot scene has footsteps on; the page's Robot moving has them off." : "")
+    ;
+  if (pyShown === key) return;           // only re-open groups when the scene changes, not on every knob move
+  pyShown = key;
+  for (const box of boxes) box.open = box.dataset.scene === want;
+}
 function buildPyList() {
   const root = $("pyList");
   for (const grp of PY_FILES) {
-    const box = document.createElement("details"); box.className = "lgroup";
-    if (root.children.length < 2) box.open = true;
+    const box = document.createElement("details"); box.className = "lgroup"; box.dataset.title = grp.title; box.dataset.scene = grp.scene;
     const h = document.createElement("summary"); h.innerHTML = `<h3></h3><small>${grp.files.length} files</small>`; h.querySelector("h3").textContent = grp.title; box.appendChild(h);
+    if (PY_EXTRA[grp.title]) { const n = document.createElement("p"); n.className = "hint"; n.textContent = PY_EXTRA[grp.title]; box.appendChild(n); }
     const ol = document.createElement("ol"); ol.className = "tracks"; box.appendChild(ol);
     const err = document.createElement("p"); err.className = "err"; err.hidden = true;
     err.textContent = "Couldn't load this file. The list works on the published page, or when the repo folder is served by a local web server (python -m http.server).";
@@ -1301,7 +1374,7 @@ buildStatic(); buildRobot(); buildCards();
   const first = sceneOrder().find(id => SCENARIOS[id]);
   if (first) loadScene(first); else loadScene("custom", "robot");
 })();
-drawHead(); drawLegend(); buildPyList();
+drawHead(); drawLegend(); buildPyList(); syncPyList();
 let resizeT = null;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
