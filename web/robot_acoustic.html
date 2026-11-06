@@ -243,6 +243,7 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .spk-text { flex: 1 1 16em; min-width: 0; font: inherit; font-size: .88rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); color: var(--ink); }
 .spk-text:focus-visible { outline: 3px solid var(--mic); outline-offset: 1px; }
 .upbtn { position: relative; display: inline-flex; align-items: center; font-size: .86rem; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 5px 11px; background: var(--panel); cursor: pointer; }
+.upbtn[hidden] { display: none; }
 .upbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .upbtn:focus-within { outline: 3px solid var(--mic); outline-offset: 2px; }
 .upname { overflow-wrap: anywhere; }
