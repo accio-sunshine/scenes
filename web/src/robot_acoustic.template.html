@@ -331,7 +331,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   <section aria-labelledby="h-view">
     <div class="vhead">
       <div class="vtitle"><b id="vName">Mic 1 alone</b><span id="vDesc"></span></div>
-      <div class="row"><span class="time" id="vTime">0.00 / 5.50 s</span><button class="primary" id="vPlay">Play</button></div>
+      <div class="row"><span class="time" id="vTime">0.00 s</span><button class="primary" id="vPlay">Play</button></div>
     </div>
     <div class="viewer" id="viewer">
       <svg id="tl" viewBox="0 0 900 236" role="img" aria-label="Timeline of who is talking and what the noise sources and the robot are doing"></svg>
@@ -395,7 +395,7 @@ const DEF = { rt60: 0.5, radius: 5, roomDb: 25, manAng: 40, womanAng: 150, dist:
   fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8,
   footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
 const ROBOT_KEYS = ["fanOn", "fanDb", "fanRpm", "neckOn", "neckDb", "shouldersOn", "shouldersDb", "footstepsOn", "footstepsDb", "clicksOn", "clicksDb", "humOn", "humDb"];
-const BASE = { schema: 2, scenario: "custom", roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
+const BASE = { schema: 2, scenario: "custom", duration: 5.5, roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
   micCount: 8, arrayShape: "ring", ringGap: 8, radius: 5, arrayH: 1.5, arrayX: 3, arrayY: 2.5, speakers: [], noises: [] };
 for (const k of ROBOT_KEYS) BASE[k] = DEF[k];
 const ROBOT_OFF = { fanOn: false, neckOn: false, shouldersOn: false, footstepsOn: false, clicksOn: false, humOn: false };
@@ -403,6 +403,9 @@ const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, 
 const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
 const MIC_COUNTS = [4, 6, 8, 12, 16];
 const MAX_SPK = 5;
+const DURATIONS = [3, 5.5, 10, 20, 30, 60, 90, 120];   // recording length choices, s (5.5 = the v1 / Python-checked length)
+const curDur = () => (RES && RES.duration) || P.duration || 5.5;   // length of what is on screen
+const fmtDur = d => d < 60 ? `${d} s` : `${d / 60} min`;
 const PRESETS = [
   { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still." },
   { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum." },
@@ -521,6 +524,14 @@ function buildStatic() {
   const st = regs.st;
   let g = group("Room", "");
   const num = (k, o) => mkRange(g, st, { id: "k_" + k, get: () => P[k], set: v => { P[k] = v; }, ...o });
+  const drow = document.createElement("div"); drow.className = "fieldrow"; g.appendChild(drow);
+  mkSelect(drow, st, { id: "k_duration", label: "Recording length", options: DURATIONS.map(d => [d, fmtDur(d)]), get: () => P.duration, set: v => { P.duration = +v; },
+    after: () => { for (const sp of P.speakers) sp.start = Math.min(sp.start, Math.max(4.5, P.duration - 1)); } });
+  const dnote = document.createElement("p"); dnote.className = "hint"; dnote.id = "durNote"; g.appendChild(dnote);
+  st.push(() => {   // measured in Chromium, Factory scene: 120 s took ~112 s with 8 mics, ~185 s with 16
+    const est = P.duration * (0.5 + 0.06 * P.micCount);
+    dnote.textContent = P.duration > 20 ? `Each change re-renders the whole recording: about ${est < 90 ? Math.round(est / 10) * 10 + " s" : (est / 60).toFixed(1) + " min"} at this length, and up to ~2 GB of memory at 2 min.` : "";
+    dnote.hidden = P.duration <= 20; });
   num("roomL", { label: "Length", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomW", { label: "Width", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomH", { label: "Height", min: 1, max: 8, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
@@ -586,7 +597,7 @@ function buildSpeakers() {
     r("el", { label: "Elevation", min: -60, max: 90, step: 1, fmt: deg });
     r("dist", { label: "Distance", min: 0.3, max: 8, step: 0.05, fmt: mtr });
     r("db", { label: "Loudness", min: -30, max: 10, step: 1, fmt: v => i === 0 ? "0 dB (reference)" : dB(v), dis: () => i === 0 });
-    r("start", { label: "Starts at", min: 0, max: 4.5, step: 0.1, fmt: v => v.toFixed(1) + " s" });
+    r("start", { label: "Starts at", range: () => [0, Math.max(4.5, P.duration - 1)], step: 0.1, fmt: v => v.toFixed(1) + " s" });
     root.appendChild(card);
   });
 }
@@ -595,7 +606,7 @@ function buildNoises() {
   const oldp = box.querySelector(".hint"); if (oldp) oldp.remove();
   regs.noi.length = 0;
   const p = document.createElement("p"); p.className = "hint";
-  p.textContent = P.noises.length ? "Moving sources travel along their path over the 5.5 s." : "None in the classic tests.";
+  p.textContent = P.noises.length ? `Moving sources travel along their path over the ${fmtDur(P.duration)}.` : "None in the classic tests.";
   box.appendChild(p);
   const list = document.createElement("div"); list.className = "slist"; list.id = "noiList"; box.appendChild(list);
   P.noises.forEach((n0, i) => {
@@ -877,7 +888,7 @@ function changed(now) {
 }
 
 // ---------------------------------------------------------------- timeline
-const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / 5.5;
+const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / curDur();
 let tlHead = el("line", {});
 function drawTimeline() {
   const tl = $("tl"); tl.textContent = "";
@@ -897,7 +908,8 @@ function drawTimeline() {
       else if (r.motor && RES && RES.motor && RES.motor[r.motor]) {
         const vals = RES.motor[r.motor].map(Math.abs), mx = r.motor === "fan" ? Math.max(6000, ...vals) : Math.max(...vals) || 1;
         let d = `M${xs(0)} ${y + h}`;
-        vals.forEach((v, i) => { d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
+        const every = Math.max(1, Math.round(vals.length / 900));   // at most ~900 points across the timeline
+        vals.forEach((v, i) => { if (i % every === 0) d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
         d += ` L${xs((vals.length - 1) / 100)} ${y + h} Z`;
         el("path", { d, fill: "var(--noise)", "fill-opacity": 0.45, stroke: "var(--noise)", "stroke-width": 1 }, tl);
       }
@@ -906,7 +918,8 @@ function drawTimeline() {
   }
   const H = y + 22;
   tl.setAttribute("viewBox", `0 0 900 ${H}`);
-  for (let s = 0; s <= 5; s++) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
+  const D = curDur(), tick = D <= 6 ? 1 : D <= 12 ? 2 : D <= 30 ? 5 : D <= 60 ? 10 : 20;
+  for (let s = 0; s <= D + 1e-9; s += tick) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
   tlHead = el("line", { x1: X0, x2: X0, y1: 6, y2: H - 20, stroke: "var(--ink)", "stroke-width": 2, opacity: 0 }, tl);
 }
 
@@ -1092,7 +1105,7 @@ function tick() {
     $("ph").style.opacity = 1;
     const plots = $("plots"), cs = getComputedStyle(plots);
     const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = plots.clientWidth - l - r;
-    $("ph").style.left = (l + w * t / 5.5) + "px";
+    $("ph").style.left = (l + w * t / curDur()) + "px";
     tlHead.setAttribute("x1", xs(t)); tlHead.setAttribute("x2", xs(t)); tlHead.setAttribute("opacity", 1);
   }
   $("vTime").textContent = `${t.toFixed(2)} / ${playing.dur.toFixed(2)} s`;
@@ -1160,7 +1173,7 @@ $("plots").addEventListener("click", e => {
   if (!view) return;
   const plots = $("plots"), cs = getComputedStyle(plots), rect = plots.getBoundingClientRect();
   const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = rect.width - l - r;
-  const t = Math.max(0, Math.min(5.4, (e.clientX - rect.left - l) / w * 5.5));
+  const D = view.arr.length / 16000, t = Math.max(0, Math.min(D - 0.1, (e.clientX - rect.left - l) / w * D));
   stopAll();
   const btn = document.querySelector(`ol.tracks li[data-key="${view.key}"] .play`);
   playArray(view.key, view.arr, btn, t);

@@ -147,6 +147,11 @@ function scRobot(rng, base, span, stepPeriod) {
   return out;
 }
 function DUR_SC() { return N / FS; }
+// A time written for the 5.5 s clip (e.g. "stop at 5.3 s"), moved with the end of a longer or shorter clip. Exactly the
+// literal at 5.5 s, so the default scenes (and their Python check) are unchanged.
+function scEnd(t55) { const d = DUR_SC(); return d === 5.5 ? t55 : t55 + d - 5.5; }
+// An event count written for 5.5 s, scaled to the clip length (unchanged at 5.5 s).
+function scCount(n55) { const d = DUR_SC(); return d === 5.5 ? n55 : Math.max(1, Math.round(n55 * d / 5.5)); }
 
 // ---------------------------------------------------------------- generators
 const NOISE_GEN = {
@@ -190,8 +195,9 @@ const NOISE_GEN = {
   // Door knocks: 2 groups of 3 knocks (~0.22 s apart); each knock = wood thump (150/320/600 Hz, ~25 ms) + short click. Synthesised.
   knocks(rng) {
     const out = scZeros(), cl = bandnoise(800, 5000, 300, rng);
-    const g0 = 0.6 + 0.8 * rng.u(), g1 = g0 + 2.2 + rng.u();
-    for (const g of [g0, g1]) for (let k = 0; k < 3; k++) {
+    const g0 = 0.6 + 0.8 * rng.u(), g1 = g0 + 2.2 + rng.u(), gs = [g0, g1];
+    while (DUR_SC() !== 5.5 && gs[gs.length - 1] + 2.7 < DUR_SC() - 0.8) gs.push(gs[gs.length - 1] + 2.2 + rng.u());   // longer clips: keep knocking
+    for (const g of gs) if (g < DUR_SC() - 0.3) for (let k = 0; k < 3; k++) {
       const s0 = Math.round((g + k * (0.2 + 0.05 * rng.u())) * FS), a = 0.8 + 0.4 * rng.u();
       scRing(out, s0, [[150, a, 0.03], [320, 0.6 * a, 0.02], [600, 0.3 * a, 0.012]], 2000);
       scBurst(out, s0, cl, 0.5 * a, 0.002);
@@ -218,7 +224,7 @@ const NOISE_GEN = {
   // (110/260/540/1100/2300 Hz, 0.1-0.4 s) preceded by a short hydraulic hiss. Synthesised.
   press(rng) {
     const out = scZeros(), imp = bandnoise(100, 6000, Math.round(0.4 * FS), rng), hiss = bandnoise(1000, 6000, Math.round(0.3 * FS), rng);
-    for (let t = 0.2 + 0.8 * rng.u(); t < 5.3; t += 1.3 + 0.5 * rng.u()) {
+    for (let t = 0.2 + 0.8 * rng.u(); t < scEnd(5.3); t += 1.3 + 0.5 * rng.u()) {
       const s0 = Math.round(t * FS), a = 0.85 + 0.3 * rng.u();
       for (let k = 0; k < hiss.length; k++) if (s0 - hiss.length + k >= 0) out[s0 - hiss.length + k] += 0.15 * hiss[k] * (k / hiss.length);
       scBurst(out, s0, imp, 2.0 * a, 0.03);
@@ -230,8 +236,8 @@ const NOISE_GEN = {
   airhiss(rng) {
     const out = scZeros(), h = bandnoise(3000, 7800, N, rng), lk = bandnoise(2500, 7500, N, rng), env = scZeros();
     let t = 0.2 + 0.6 * rng.u();
-    const nb = 3 + Math.floor(rng.u() * 2);
-    for (let b = 0; b < nb && t < 5.2; b++) {
+    const nb = scCount(3 + Math.floor(rng.u() * 2));
+    for (let b = 0; b < nb && t < scEnd(5.2); b++) {
       const d = 0.25 + 0.45 * rng.u(), a = 0.6 + 0.4 * rng.u();
       for (let i = Math.round(t * FS); i < Math.min(N, Math.round((t + d + 0.1) * FS)); i++) { const x = i / FS - t; env[i] = a * Math.min(1, x / 0.012) * (x < d ? 1 : Math.exp(-(x - d) / 0.04)) * (1 + 0.15 * Math.sin(2 * Math.PI * 23 * x)); }
       t += d + 0.5 + 0.9 * rng.u();
@@ -242,7 +248,7 @@ const NOISE_GEN = {
   // AGV reverse beeper: 1 kHz (+2 kHz) beep, 0.5 s on / 0.5 s off with 6 ms ramps, over soft 200-900 Hz drive whirr. Synthesised.
   agv_beeper(rng) {
     const out = scZeros(), ph = rng.u();
-    for (let t = -ph * 1.0; t < 5.5; t += 1.0) scGate(out, t, 0.5, 1000, [[1, 1.0], [2, 0.35], [3, 0.12]], 1);
+    for (let t = -ph * 1.0; t < scEnd(5.5); t += 1.0) scGate(out, t, 0.5, 1000, [[1, 1.0], [2, 0.35], [3, 0.12]], 1);
     const w = bandnoise(200, 900, N, rng); for (let i = 0; i < N; i++) out[i] += 0.12 * w[i];
     return scNormRms(out);
   },
@@ -254,7 +260,7 @@ const NOISE_GEN = {
   conveyor(rng) {
     const r = bandnoise(40, 300, N, rng), b = bandnoise(500, 3000, N, rng), out = scZeros(), cl = bandnoise(1000, 6000, 300, rng);
     for (let i = 0; i < N; i++) out[i] = r[i] * (1 + 0.35 * Math.sin(2 * Math.PI * 17 * i / FS)) + 0.3 * b[i];
-    for (let t = 0.1 + 0.4 * rng.u(); t < 5.4; t += 0.45 + 0.04 * rng.g()) { const s0 = Math.round(t * FS); scBurst(out, s0, cl, 1.0, 0.006); scRing(out, s0, [[420, 0.8, 0.012]], 1500); }
+    for (let t = 0.1 + 0.4 * rng.u(); t < scEnd(5.4); t += 0.45 + 0.04 * rng.g()) { const s0 = Math.round(t * FS); scBurst(out, s0, cl, 1.0, 0.006); scRing(out, s0, [[420, 0.8, 0.012]], 1500); }
     scRing(out, Math.round((1 + 3 * rng.u()) * FS), [[90, 3, 0.07], [200, 1.5, 0.05]], 6000);
     return scNormRms(out);
   },
@@ -263,14 +269,14 @@ const NOISE_GEN = {
   // Patient monitor: 880 Hz (+1760) 110 ms beep about every 0.86 s (heart rate ~70) with small jitter and a quiet 50 Hz hum. Synthesised.
   monitor(rng) {
     const out = scZeros();
-    for (let t = rng.u() * 0.86; t < 5.5; t += 0.86 + 0.01 * rng.g()) scGate(out, t, 0.11, 880, [[1, 1.0], [2, 0.25]], 1, 0.008);
+    for (let t = rng.u() * 0.86; t < scEnd(5.5); t += 0.86 + 0.01 * rng.g()) scGate(out, t, 0.11, 880, [[1, 1.0], [2, 0.25]], 1, 0.008);
     const h = tone(new Float64Array(N).fill(50), [[1, 1]], rng); scAdd(out, h, 0.04);
     return scNormRms(out);
   },
   // IV-pump alarm (second bedside device): 3-note "ding-ding-dong" (1320/1320/990 Hz, bell-like decay) repeated every ~1.9 s. Synthesised.
   ivpump(rng) {
     const out = scZeros();
-    for (let t = 0.1 + 0.8 * rng.u(); t < 5.4; t += 1.9) [[0, 1320], [0.22, 1320], [0.44, 990]].forEach(([dt, f]) => scRing(out, Math.round((t + dt) * FS), [[f, 1, 0.09], [2 * f, 0.25, 0.05]], 4000));
+    for (let t = 0.1 + 0.8 * rng.u(); t < scEnd(5.4); t += 1.9) [[0, 1320], [0.22, 1320], [0.44, 990]].forEach(([dt, f]) => scRing(out, Math.round((t + dt) * FS), [[f, 1, 0.09], [2 * f, 0.25, 0.05]], 4000));
     return scNormRms(out);
   },
   // Ventilator: 3 s breath cycle: ~1 s inspiratory hiss (200-2500 Hz, smooth rise/fall), pause, ~1.2 s exhalation (150-1200 Hz decaying), valve click at each phase + 120 Hz blower hum. Synthesised.
@@ -282,7 +288,7 @@ const NOISE_GEN = {
       if (t < 1.0) g = Math.sin(Math.PI * t / 1.0) ** 2; else if (t >= 1.3 && t < 2.5) { const x = (t - 1.3) / 1.2; out[i] = exh[i] * 0.8 * Math.exp(-3 * x) * Math.min(1, x * 20); }
       out[i] += ins[i] * g * 0.9 + 0.12 * hum[i];
     }
-    for (let c = -ph; c < 5.5; c += 1.5) if (c >= 0) scBurst(out, Math.round(c * FS), cl, 0.7, 0.003);   // valve clicks at phase changes (approx.)
+    for (let c = -ph; c < scEnd(5.5); c += 1.5) if (c >= 0) scBurst(out, Math.round(c * FS), cl, 0.7, 0.003);   // valve clicks at phase changes (approx.)
     return scNormRms(out);
   },
   // HVAC: 60-800 Hz duct rumble, low-passed 800-5000 Hz air noise, 120 Hz blower tone, +-10 % slow wander. Synthesised.
@@ -305,8 +311,8 @@ const NOISE_GEN = {
   // Trolley: wheel rumble 150-2500 Hz modulated at wheel rotation (~8 Hz), floor-joint clacks every ~0.35 s, a squeaking wheel (2.2-2.6 kHz glide), speed envelope rising then falling. Synthesised.
   trolley(rng) {
     const r = bandnoise(150, 2500, N, rng), out = scZeros(), cl = bandnoise(500, 4000, 200, rng), sq = scZeros(), sq0 = 1.0 + 2 * rng.u();
-    for (let i = 0; i < N; i++) { const t = i / FS, sp = Math.sin(Math.PI * Math.min(1, Math.max(0, t / 5.2))) ** 0.7; out[i] = r[i] * (1 + 0.6 * Math.sin(2 * Math.PI * 8 * t * (0.5 + sp))) * sp; }
-    for (let t = 0.2; t < 5.3; t += 0.35) { const sp = Math.sin(Math.PI * t / 5.4); scBurst(out, Math.round(t * FS), cl, 1.5 * sp, 0.008); }
+    for (let i = 0; i < N; i++) { const t = i / FS, sp = Math.sin(Math.PI * Math.min(1, Math.max(0, t / scEnd(5.2)))) ** 0.7; out[i] = r[i] * (1 + 0.6 * Math.sin(2 * Math.PI * 8 * t * (0.5 + sp))) * sp; }
+    for (let t = 0.2; t < scEnd(5.3); t += 0.35) { const sp = Math.sin(Math.PI * t / scEnd(5.4)); scBurst(out, Math.round(t * FS), cl, 1.5 * sp, 0.008); }
     let ph = 0; for (let i = 0; i < N; i++) { const t = i / FS - sq0; if (t < 0 || t > 1.2) continue; ph += 2 * Math.PI * (2200 + 400 * t) / FS; sq[i] = 0.5 * Math.sin(ph) * Math.sin(Math.PI * t / 1.2) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 14 * t)); }
     scAdd(out, sq, 1);
     return scNormRms(out);
@@ -345,7 +351,7 @@ const NOISE_GEN = {
   // Turn-signal relay: tick (1.3 kHz ring) and tock (0.9 kHz ring) at 1.6 Hz, each a 4 ms noise click + 10 ms resonance. Synthesised.
   indicator(rng) {
     const out = scZeros(), cl = bandnoise(800, 5000, 200, rng);
-    for (let t = 0.1 + 0.3 * rng.u(); t < 5.4; t += 0.625) {
+    for (let t = 0.1 + 0.3 * rng.u(); t < scEnd(5.4); t += 0.625) {
       const s0 = Math.round(t * FS), s1 = Math.round((t + 0.3125) * FS);
       scBurst(out, s0, cl, 1, 0.004); scRing(out, s0, [[1300, 0.8, 0.01]], 600);
       scBurst(out, s1, cl, 0.7, 0.004); scRing(out, s1, [[900, 0.6, 0.012]], 600);
@@ -354,7 +360,7 @@ const NOISE_GEN = {
   },
   // Road bumps: 2-3 events, each = body thump (55/110 Hz, 0.1-0.15 s) + 200-1200 Hz suspension rattle, repeated ~0.12 s later for the rear axle. Synthesised.
   bumps(rng) {
-    const out = scZeros(), rat = bandnoise(200, 1200, Math.round(0.3 * FS), rng), nb = 2 + Math.floor(rng.u() * 2);
+    const out = scZeros(), rat = bandnoise(200, 1200, Math.round(0.3 * FS), rng), nb = scCount(2 + Math.floor(rng.u() * 2));
     for (let b = 0; b < nb; b++) {
       const t = 0.5 + b * 1.7 + 0.6 * rng.u(), a = 0.7 + 0.6 * rng.u();
       [[0, 1], [0.12, 0.7]].forEach(([dt, g]) => { const s0 = Math.round((t + dt) * FS); scRing(out, s0, [[55, 2 * a * g, 0.1], [110, a * g, 0.08]], 4000); scBurst(out, s0, rat, 1.2 * a * g, 0.05); });

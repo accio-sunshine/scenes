@@ -3,7 +3,11 @@
 // robot noise recipes, levels and MPDR beamformer. The room is lighter than
 // pyroomacoustics: exact image sources up to 3 bounces plus a diffuse late tail.
 "use strict";
-const FS = 16000, DUR = 5.5, N = Math.round(DUR * FS), C = 343, NFFT = 512, HOP = 128;
+const FS = 16000, C = 343, NFFT = 512, HOP = 128;
+// Recording length: set per render from p.duration (engSetDuration). 5.5 s is the v1 length; everything that depends on
+// the length (N, NFR, schedules) reads these at call time, so one render at a time sees one consistent length.
+const DUR0 = 5.5, DURATIONS = [3, 5.5, 10, 20, 30, 60, 90, 120];
+let DUR = DUR0, N = Math.round(DUR * FS);
 
 // ---------------------------------------------------------------- random numbers
 function makeRng(seed) {
@@ -72,8 +76,8 @@ function motorState(fanMax) {
   const fan = new Float64Array(N), neck = new Float64Array(N), sh = new Float64Array(N), walk = new Float64Array(N);
   const fanStart = 2400 * fanMax / 4200;
   for (let i = 0; i < N; i++) {
-    const t = i / FS;
-    fan[i] = t < 2 ? fanStart + (fanMax - fanStart) * t / 2 : fanMax;
+    const t0_ = i / FS, t = t0_ < DUR0 ? t0_ : t0_ % DUR0;   // head turns, gesture and walking repeat every 5.5 s
+    fan[i] = t0_ < 2 ? fanStart + (fanMax - fanStart) * t0_ / 2 : fanMax;
     for (const [t0, t1, v] of [[0.8, 1.6, 1.2], [3.4, 4.0, -1.6]]) if (t >= t0 && t < t1) neck[i] = v * Math.sin(Math.PI * (t - t0) / (t1 - t0));
     if (t >= 1.8 && t < 2.8) sh[i] = 2.0 * Math.sin(2 * Math.PI * 1.5 * (t - 1.8));
     if (t >= 2.6 && t < 4.8) walk[i] = 1;
@@ -147,6 +151,7 @@ function normalizeParams(p0) {
   num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
+  num("duration", DUR0, 1, 120);
   for (const k of ROBOT_KEYS) { p[k + "On"] = !!p[k + "On"]; num(k + "Db", ENG_ROBOT_DB_DEF[k + "Db"]); }
 
   // microphones
@@ -193,7 +198,7 @@ function normalizeParams(p0) {
     if (!ENG_VOICE_IDS.includes(s.voice)) { warn.push("Speaker " + (i + 1) + ": unknown voice '" + s.voice + "', using " + defVoice[i] + "."); s.voice = defVoice[i]; }
     s.az = ((Number(s.az) % 360) + 360) % 360 || 0; s.el = engClamp(Number(s.el) || 0, -60, 90);
     s.dist = engClamp(Number(s.dist) || 1.5, 0.3, 8); s.db = i === 0 ? 0 : (Number.isFinite(Number(s.db)) ? Number(s.db) : 0);
-    s.start = engClamp(Number(s.start) || 0, 0, 4.5); s.target = s.target !== false;
+    s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     return s;
   });
   if (p0.speakers && p0.speakers.length > 5) warn.push("Only the first 5 speakers are used.");
@@ -367,7 +372,8 @@ const engZeros = M => Array.from({ length: M }, () => new Float64Array(N));
 // ---------------------------------------------------------------- STFT / beamforming
 const WIN = Float64Array.from({ length: NFFT }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / NFFT));
 const NB = NFFT / 2 + 1, PAD = NFFT / 2;
-const NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1;
+let NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1;
+function engSetDuration(d) { DUR = d; N = Math.round(d * FS); NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1; }
 // STFT of a pair of real signals in one complex FFT per frame -> two arrays [frame*NB] re/im
 function stftPair(x, y, frame, out0, out1) {
   const re = new Float64Array(NFFT), im = new Float64Array(NFFT), s = frame * HOP - PAD;
@@ -564,6 +570,7 @@ function engSegWeights() {
 function render(p0, voices, progress = () => {}) {
   const t0 = Date.now();
   const p = normalizeParams(p0), warnings = p._warnings.slice();
+  engSetDuration(p.duration);
   const room = [p.roomL, p.roomW, p.roomH], cen = [p.arrayX, p.arrayY, p.arrayH];
   const mics = engMicPositions(p, cen), M = mics.length, rel = mics.map(m => [m[0] - cen[0], m[1] - cen[1], m[2] - cen[2]]);
   const tailLen = Math.round(Math.min(p.rt60, 1.5) * FS);
@@ -736,6 +743,7 @@ function render(p0, voices, progress = () => {}) {
     motor: { fan: ds(ms.fan), neck: ds(ms.neck), sh: ds(ms.sh), walk: ds(ms.walk) },
     room: { L: room[0], W: room[1], H: room[2], rt60: p.rt60, rt60Hf: engRt60Hf(p.rt60, p.damping), volume: V, damping: p.damping },
     micPositions: rel.map(r => r.map(v => Math.round(v * 1e5) / 1e5)),   // metres from the array centre, mic 1 first (x = az 0, z up)
+    duration: DUR, n: N,
     dry: Object.fromEntries(Object.entries(dry).map(([k, v]) => [k, Float32Array.from(v)])), geometry: geo,
     ms: Date.now() - t0,
   };

@@ -331,7 +331,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   <section aria-labelledby="h-view">
     <div class="vhead">
       <div class="vtitle"><b id="vName">Mic 1 alone</b><span id="vDesc"></span></div>
-      <div class="row"><span class="time" id="vTime">0.00 / 5.50 s</span><button class="primary" id="vPlay">Play</button></div>
+      <div class="row"><span class="time" id="vTime">0.00 s</span><button class="primary" id="vPlay">Play</button></div>
     </div>
     <div class="viewer" id="viewer">
       <svg id="tl" viewBox="0 0 900 236" role="img" aria-label="Timeline of who is talking and what the noise sources and the robot are doing"></svg>
@@ -374,7 +374,11 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 // robot noise recipes, levels and MPDR beamformer. The room is lighter than
 // pyroomacoustics: exact image sources up to 3 bounces plus a diffuse late tail.
 "use strict";
-const FS = 16000, DUR = 5.5, N = Math.round(DUR * FS), C = 343, NFFT = 512, HOP = 128;
+const FS = 16000, C = 343, NFFT = 512, HOP = 128;
+// Recording length: set per render from p.duration (engSetDuration). 5.5 s is the v1 length; everything that depends on
+// the length (N, NFR, schedules) reads these at call time, so one render at a time sees one consistent length.
+const DUR0 = 5.5, DURATIONS = [3, 5.5, 10, 20, 30, 60, 90, 120];
+let DUR = DUR0, N = Math.round(DUR * FS);
 
 // ---------------------------------------------------------------- random numbers
 function makeRng(seed) {
@@ -443,8 +447,8 @@ function motorState(fanMax) {
   const fan = new Float64Array(N), neck = new Float64Array(N), sh = new Float64Array(N), walk = new Float64Array(N);
   const fanStart = 2400 * fanMax / 4200;
   for (let i = 0; i < N; i++) {
-    const t = i / FS;
-    fan[i] = t < 2 ? fanStart + (fanMax - fanStart) * t / 2 : fanMax;
+    const t0_ = i / FS, t = t0_ < DUR0 ? t0_ : t0_ % DUR0;   // head turns, gesture and walking repeat every 5.5 s
+    fan[i] = t0_ < 2 ? fanStart + (fanMax - fanStart) * t0_ / 2 : fanMax;
     for (const [t0, t1, v] of [[0.8, 1.6, 1.2], [3.4, 4.0, -1.6]]) if (t >= t0 && t < t1) neck[i] = v * Math.sin(Math.PI * (t - t0) / (t1 - t0));
     if (t >= 1.8 && t < 2.8) sh[i] = 2.0 * Math.sin(2 * Math.PI * 1.5 * (t - 1.8));
     if (t >= 2.6 && t < 4.8) walk[i] = 1;
@@ -518,6 +522,7 @@ function normalizeParams(p0) {
   num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
+  num("duration", DUR0, 1, 120);
   for (const k of ROBOT_KEYS) { p[k + "On"] = !!p[k + "On"]; num(k + "Db", ENG_ROBOT_DB_DEF[k + "Db"]); }
 
   // microphones
@@ -564,7 +569,7 @@ function normalizeParams(p0) {
     if (!ENG_VOICE_IDS.includes(s.voice)) { warn.push("Speaker " + (i + 1) + ": unknown voice '" + s.voice + "', using " + defVoice[i] + "."); s.voice = defVoice[i]; }
     s.az = ((Number(s.az) % 360) + 360) % 360 || 0; s.el = engClamp(Number(s.el) || 0, -60, 90);
     s.dist = engClamp(Number(s.dist) || 1.5, 0.3, 8); s.db = i === 0 ? 0 : (Number.isFinite(Number(s.db)) ? Number(s.db) : 0);
-    s.start = engClamp(Number(s.start) || 0, 0, 4.5); s.target = s.target !== false;
+    s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     return s;
   });
   if (p0.speakers && p0.speakers.length > 5) warn.push("Only the first 5 speakers are used.");
@@ -738,7 +743,8 @@ const engZeros = M => Array.from({ length: M }, () => new Float64Array(N));
 // ---------------------------------------------------------------- STFT / beamforming
 const WIN = Float64Array.from({ length: NFFT }, (_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / NFFT));
 const NB = NFFT / 2 + 1, PAD = NFFT / 2;
-const NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1;
+let NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1;
+function engSetDuration(d) { DUR = d; N = Math.round(d * FS); NFR = Math.floor((N + 2 * PAD - NFFT) / HOP) + 1; }
 // STFT of a pair of real signals in one complex FFT per frame -> two arrays [frame*NB] re/im
 function stftPair(x, y, frame, out0, out1) {
   const re = new Float64Array(NFFT), im = new Float64Array(NFFT), s = frame * HOP - PAD;
@@ -935,6 +941,7 @@ function engSegWeights() {
 function render(p0, voices, progress = () => {}) {
   const t0 = Date.now();
   const p = normalizeParams(p0), warnings = p._warnings.slice();
+  engSetDuration(p.duration);
   const room = [p.roomL, p.roomW, p.roomH], cen = [p.arrayX, p.arrayY, p.arrayH];
   const mics = engMicPositions(p, cen), M = mics.length, rel = mics.map(m => [m[0] - cen[0], m[1] - cen[1], m[2] - cen[2]]);
   const tailLen = Math.round(Math.min(p.rt60, 1.5) * FS);
@@ -1107,6 +1114,7 @@ function render(p0, voices, progress = () => {}) {
     motor: { fan: ds(ms.fan), neck: ds(ms.neck), sh: ds(ms.sh), walk: ds(ms.walk) },
     room: { L: room[0], W: room[1], H: room[2], rt60: p.rt60, rt60Hf: engRt60Hf(p.rt60, p.damping), volume: V, damping: p.damping },
     micPositions: rel.map(r => r.map(v => Math.round(v * 1e5) / 1e5)),   // metres from the array centre, mic 1 first (x = az 0, z up)
+    duration: DUR, n: N,
     dry: Object.fromEntries(Object.entries(dry).map(([k, v]) => [k, Float32Array.from(v)])), geometry: geo,
     ms: Date.now() - t0,
   };
@@ -1306,6 +1314,11 @@ function scRobot(rng, base, span, stepPeriod) {
   return out;
 }
 function DUR_SC() { return N / FS; }
+// A time written for the 5.5 s clip (e.g. "stop at 5.3 s"), moved with the end of a longer or shorter clip. Exactly the
+// literal at 5.5 s, so the default scenes (and their Python check) are unchanged.
+function scEnd(t55) { const d = DUR_SC(); return d === 5.5 ? t55 : t55 + d - 5.5; }
+// An event count written for 5.5 s, scaled to the clip length (unchanged at 5.5 s).
+function scCount(n55) { const d = DUR_SC(); return d === 5.5 ? n55 : Math.max(1, Math.round(n55 * d / 5.5)); }
 
 // ---------------------------------------------------------------- generators
 const NOISE_GEN = {
@@ -1349,8 +1362,9 @@ const NOISE_GEN = {
   // Door knocks: 2 groups of 3 knocks (~0.22 s apart); each knock = wood thump (150/320/600 Hz, ~25 ms) + short click. Synthesised.
   knocks(rng) {
     const out = scZeros(), cl = bandnoise(800, 5000, 300, rng);
-    const g0 = 0.6 + 0.8 * rng.u(), g1 = g0 + 2.2 + rng.u();
-    for (const g of [g0, g1]) for (let k = 0; k < 3; k++) {
+    const g0 = 0.6 + 0.8 * rng.u(), g1 = g0 + 2.2 + rng.u(), gs = [g0, g1];
+    while (DUR_SC() !== 5.5 && gs[gs.length - 1] + 2.7 < DUR_SC() - 0.8) gs.push(gs[gs.length - 1] + 2.2 + rng.u());   // longer clips: keep knocking
+    for (const g of gs) if (g < DUR_SC() - 0.3) for (let k = 0; k < 3; k++) {
       const s0 = Math.round((g + k * (0.2 + 0.05 * rng.u())) * FS), a = 0.8 + 0.4 * rng.u();
       scRing(out, s0, [[150, a, 0.03], [320, 0.6 * a, 0.02], [600, 0.3 * a, 0.012]], 2000);
       scBurst(out, s0, cl, 0.5 * a, 0.002);
@@ -1377,7 +1391,7 @@ const NOISE_GEN = {
   // (110/260/540/1100/2300 Hz, 0.1-0.4 s) preceded by a short hydraulic hiss. Synthesised.
   press(rng) {
     const out = scZeros(), imp = bandnoise(100, 6000, Math.round(0.4 * FS), rng), hiss = bandnoise(1000, 6000, Math.round(0.3 * FS), rng);
-    for (let t = 0.2 + 0.8 * rng.u(); t < 5.3; t += 1.3 + 0.5 * rng.u()) {
+    for (let t = 0.2 + 0.8 * rng.u(); t < scEnd(5.3); t += 1.3 + 0.5 * rng.u()) {
       const s0 = Math.round(t * FS), a = 0.85 + 0.3 * rng.u();
       for (let k = 0; k < hiss.length; k++) if (s0 - hiss.length + k >= 0) out[s0 - hiss.length + k] += 0.15 * hiss[k] * (k / hiss.length);
       scBurst(out, s0, imp, 2.0 * a, 0.03);
@@ -1389,8 +1403,8 @@ const NOISE_GEN = {
   airhiss(rng) {
     const out = scZeros(), h = bandnoise(3000, 7800, N, rng), lk = bandnoise(2500, 7500, N, rng), env = scZeros();
     let t = 0.2 + 0.6 * rng.u();
-    const nb = 3 + Math.floor(rng.u() * 2);
-    for (let b = 0; b < nb && t < 5.2; b++) {
+    const nb = scCount(3 + Math.floor(rng.u() * 2));
+    for (let b = 0; b < nb && t < scEnd(5.2); b++) {
       const d = 0.25 + 0.45 * rng.u(), a = 0.6 + 0.4 * rng.u();
       for (let i = Math.round(t * FS); i < Math.min(N, Math.round((t + d + 0.1) * FS)); i++) { const x = i / FS - t; env[i] = a * Math.min(1, x / 0.012) * (x < d ? 1 : Math.exp(-(x - d) / 0.04)) * (1 + 0.15 * Math.sin(2 * Math.PI * 23 * x)); }
       t += d + 0.5 + 0.9 * rng.u();
@@ -1401,7 +1415,7 @@ const NOISE_GEN = {
   // AGV reverse beeper: 1 kHz (+2 kHz) beep, 0.5 s on / 0.5 s off with 6 ms ramps, over soft 200-900 Hz drive whirr. Synthesised.
   agv_beeper(rng) {
     const out = scZeros(), ph = rng.u();
-    for (let t = -ph * 1.0; t < 5.5; t += 1.0) scGate(out, t, 0.5, 1000, [[1, 1.0], [2, 0.35], [3, 0.12]], 1);
+    for (let t = -ph * 1.0; t < scEnd(5.5); t += 1.0) scGate(out, t, 0.5, 1000, [[1, 1.0], [2, 0.35], [3, 0.12]], 1);
     const w = bandnoise(200, 900, N, rng); for (let i = 0; i < N; i++) out[i] += 0.12 * w[i];
     return scNormRms(out);
   },
@@ -1413,7 +1427,7 @@ const NOISE_GEN = {
   conveyor(rng) {
     const r = bandnoise(40, 300, N, rng), b = bandnoise(500, 3000, N, rng), out = scZeros(), cl = bandnoise(1000, 6000, 300, rng);
     for (let i = 0; i < N; i++) out[i] = r[i] * (1 + 0.35 * Math.sin(2 * Math.PI * 17 * i / FS)) + 0.3 * b[i];
-    for (let t = 0.1 + 0.4 * rng.u(); t < 5.4; t += 0.45 + 0.04 * rng.g()) { const s0 = Math.round(t * FS); scBurst(out, s0, cl, 1.0, 0.006); scRing(out, s0, [[420, 0.8, 0.012]], 1500); }
+    for (let t = 0.1 + 0.4 * rng.u(); t < scEnd(5.4); t += 0.45 + 0.04 * rng.g()) { const s0 = Math.round(t * FS); scBurst(out, s0, cl, 1.0, 0.006); scRing(out, s0, [[420, 0.8, 0.012]], 1500); }
     scRing(out, Math.round((1 + 3 * rng.u()) * FS), [[90, 3, 0.07], [200, 1.5, 0.05]], 6000);
     return scNormRms(out);
   },
@@ -1422,14 +1436,14 @@ const NOISE_GEN = {
   // Patient monitor: 880 Hz (+1760) 110 ms beep about every 0.86 s (heart rate ~70) with small jitter and a quiet 50 Hz hum. Synthesised.
   monitor(rng) {
     const out = scZeros();
-    for (let t = rng.u() * 0.86; t < 5.5; t += 0.86 + 0.01 * rng.g()) scGate(out, t, 0.11, 880, [[1, 1.0], [2, 0.25]], 1, 0.008);
+    for (let t = rng.u() * 0.86; t < scEnd(5.5); t += 0.86 + 0.01 * rng.g()) scGate(out, t, 0.11, 880, [[1, 1.0], [2, 0.25]], 1, 0.008);
     const h = tone(new Float64Array(N).fill(50), [[1, 1]], rng); scAdd(out, h, 0.04);
     return scNormRms(out);
   },
   // IV-pump alarm (second bedside device): 3-note "ding-ding-dong" (1320/1320/990 Hz, bell-like decay) repeated every ~1.9 s. Synthesised.
   ivpump(rng) {
     const out = scZeros();
-    for (let t = 0.1 + 0.8 * rng.u(); t < 5.4; t += 1.9) [[0, 1320], [0.22, 1320], [0.44, 990]].forEach(([dt, f]) => scRing(out, Math.round((t + dt) * FS), [[f, 1, 0.09], [2 * f, 0.25, 0.05]], 4000));
+    for (let t = 0.1 + 0.8 * rng.u(); t < scEnd(5.4); t += 1.9) [[0, 1320], [0.22, 1320], [0.44, 990]].forEach(([dt, f]) => scRing(out, Math.round((t + dt) * FS), [[f, 1, 0.09], [2 * f, 0.25, 0.05]], 4000));
     return scNormRms(out);
   },
   // Ventilator: 3 s breath cycle: ~1 s inspiratory hiss (200-2500 Hz, smooth rise/fall), pause, ~1.2 s exhalation (150-1200 Hz decaying), valve click at each phase + 120 Hz blower hum. Synthesised.
@@ -1441,7 +1455,7 @@ const NOISE_GEN = {
       if (t < 1.0) g = Math.sin(Math.PI * t / 1.0) ** 2; else if (t >= 1.3 && t < 2.5) { const x = (t - 1.3) / 1.2; out[i] = exh[i] * 0.8 * Math.exp(-3 * x) * Math.min(1, x * 20); }
       out[i] += ins[i] * g * 0.9 + 0.12 * hum[i];
     }
-    for (let c = -ph; c < 5.5; c += 1.5) if (c >= 0) scBurst(out, Math.round(c * FS), cl, 0.7, 0.003);   // valve clicks at phase changes (approx.)
+    for (let c = -ph; c < scEnd(5.5); c += 1.5) if (c >= 0) scBurst(out, Math.round(c * FS), cl, 0.7, 0.003);   // valve clicks at phase changes (approx.)
     return scNormRms(out);
   },
   // HVAC: 60-800 Hz duct rumble, low-passed 800-5000 Hz air noise, 120 Hz blower tone, +-10 % slow wander. Synthesised.
@@ -1464,8 +1478,8 @@ const NOISE_GEN = {
   // Trolley: wheel rumble 150-2500 Hz modulated at wheel rotation (~8 Hz), floor-joint clacks every ~0.35 s, a squeaking wheel (2.2-2.6 kHz glide), speed envelope rising then falling. Synthesised.
   trolley(rng) {
     const r = bandnoise(150, 2500, N, rng), out = scZeros(), cl = bandnoise(500, 4000, 200, rng), sq = scZeros(), sq0 = 1.0 + 2 * rng.u();
-    for (let i = 0; i < N; i++) { const t = i / FS, sp = Math.sin(Math.PI * Math.min(1, Math.max(0, t / 5.2))) ** 0.7; out[i] = r[i] * (1 + 0.6 * Math.sin(2 * Math.PI * 8 * t * (0.5 + sp))) * sp; }
-    for (let t = 0.2; t < 5.3; t += 0.35) { const sp = Math.sin(Math.PI * t / 5.4); scBurst(out, Math.round(t * FS), cl, 1.5 * sp, 0.008); }
+    for (let i = 0; i < N; i++) { const t = i / FS, sp = Math.sin(Math.PI * Math.min(1, Math.max(0, t / scEnd(5.2)))) ** 0.7; out[i] = r[i] * (1 + 0.6 * Math.sin(2 * Math.PI * 8 * t * (0.5 + sp))) * sp; }
+    for (let t = 0.2; t < scEnd(5.3); t += 0.35) { const sp = Math.sin(Math.PI * t / scEnd(5.4)); scBurst(out, Math.round(t * FS), cl, 1.5 * sp, 0.008); }
     let ph = 0; for (let i = 0; i < N; i++) { const t = i / FS - sq0; if (t < 0 || t > 1.2) continue; ph += 2 * Math.PI * (2200 + 400 * t) / FS; sq[i] = 0.5 * Math.sin(ph) * Math.sin(Math.PI * t / 1.2) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 14 * t)); }
     scAdd(out, sq, 1);
     return scNormRms(out);
@@ -1504,7 +1518,7 @@ const NOISE_GEN = {
   // Turn-signal relay: tick (1.3 kHz ring) and tock (0.9 kHz ring) at 1.6 Hz, each a 4 ms noise click + 10 ms resonance. Synthesised.
   indicator(rng) {
     const out = scZeros(), cl = bandnoise(800, 5000, 200, rng);
-    for (let t = 0.1 + 0.3 * rng.u(); t < 5.4; t += 0.625) {
+    for (let t = 0.1 + 0.3 * rng.u(); t < scEnd(5.4); t += 0.625) {
       const s0 = Math.round(t * FS), s1 = Math.round((t + 0.3125) * FS);
       scBurst(out, s0, cl, 1, 0.004); scRing(out, s0, [[1300, 0.8, 0.01]], 600);
       scBurst(out, s1, cl, 0.7, 0.004); scRing(out, s1, [[900, 0.6, 0.012]], 600);
@@ -1513,7 +1527,7 @@ const NOISE_GEN = {
   },
   // Road bumps: 2-3 events, each = body thump (55/110 Hz, 0.1-0.15 s) + 200-1200 Hz suspension rattle, repeated ~0.12 s later for the rear axle. Synthesised.
   bumps(rng) {
-    const out = scZeros(), rat = bandnoise(200, 1200, Math.round(0.3 * FS), rng), nb = 2 + Math.floor(rng.u() * 2);
+    const out = scZeros(), rat = bandnoise(200, 1200, Math.round(0.3 * FS), rng), nb = scCount(2 + Math.floor(rng.u() * 2));
     for (let b = 0; b < nb; b++) {
       const t = 0.5 + b * 1.7 + 0.6 * rng.u(), a = 0.7 + 0.6 * rng.u();
       [[0, 1], [0.12, 0.7]].forEach(([dt, g]) => { const s0 = Math.round((t + dt) * FS); scRing(out, s0, [[55, 2 * a * g, 0.1], [110, a * g, 0.08]], 4000); scBurst(out, s0, rat, 1.2 * a * g, 0.05); });
@@ -1631,7 +1645,7 @@ const DEF = { rt60: 0.5, radius: 5, roomDb: 25, manAng: 40, womanAng: 150, dist:
   fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8,
   footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
 const ROBOT_KEYS = ["fanOn", "fanDb", "fanRpm", "neckOn", "neckDb", "shouldersOn", "shouldersDb", "footstepsOn", "footstepsDb", "clicksOn", "clicksDb", "humOn", "humDb"];
-const BASE = { schema: 2, scenario: "custom", roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
+const BASE = { schema: 2, scenario: "custom", duration: 5.5, roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
   micCount: 8, arrayShape: "ring", ringGap: 8, radius: 5, arrayH: 1.5, arrayX: 3, arrayY: 2.5, speakers: [], noises: [] };
 for (const k of ROBOT_KEYS) BASE[k] = DEF[k];
 const ROBOT_OFF = { fanOn: false, neckOn: false, shouldersOn: false, footstepsOn: false, clicksOn: false, humOn: false };
@@ -1639,6 +1653,9 @@ const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, 
 const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
 const MIC_COUNTS = [4, 6, 8, 12, 16];
 const MAX_SPK = 5;
+const DURATIONS = [3, 5.5, 10, 20, 30, 60, 90, 120];   // recording length choices, s (5.5 = the v1 / Python-checked length)
+const curDur = () => (RES && RES.duration) || P.duration || 5.5;   // length of what is on screen
+const fmtDur = d => d < 60 ? `${d} s` : `${d / 60} min`;
 const PRESETS = [
   { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still." },
   { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum." },
@@ -1757,6 +1774,14 @@ function buildStatic() {
   const st = regs.st;
   let g = group("Room", "");
   const num = (k, o) => mkRange(g, st, { id: "k_" + k, get: () => P[k], set: v => { P[k] = v; }, ...o });
+  const drow = document.createElement("div"); drow.className = "fieldrow"; g.appendChild(drow);
+  mkSelect(drow, st, { id: "k_duration", label: "Recording length", options: DURATIONS.map(d => [d, fmtDur(d)]), get: () => P.duration, set: v => { P.duration = +v; },
+    after: () => { for (const sp of P.speakers) sp.start = Math.min(sp.start, Math.max(4.5, P.duration - 1)); } });
+  const dnote = document.createElement("p"); dnote.className = "hint"; dnote.id = "durNote"; g.appendChild(dnote);
+  st.push(() => {   // measured in Chromium, Factory scene: 120 s took ~112 s with 8 mics, ~185 s with 16
+    const est = P.duration * (0.5 + 0.06 * P.micCount);
+    dnote.textContent = P.duration > 20 ? `Each change re-renders the whole recording: about ${est < 90 ? Math.round(est / 10) * 10 + " s" : (est / 60).toFixed(1) + " min"} at this length, and up to ~2 GB of memory at 2 min.` : "";
+    dnote.hidden = P.duration <= 20; });
   num("roomL", { label: "Length", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomW", { label: "Width", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomH", { label: "Height", min: 1, max: 8, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
@@ -1822,7 +1847,7 @@ function buildSpeakers() {
     r("el", { label: "Elevation", min: -60, max: 90, step: 1, fmt: deg });
     r("dist", { label: "Distance", min: 0.3, max: 8, step: 0.05, fmt: mtr });
     r("db", { label: "Loudness", min: -30, max: 10, step: 1, fmt: v => i === 0 ? "0 dB (reference)" : dB(v), dis: () => i === 0 });
-    r("start", { label: "Starts at", min: 0, max: 4.5, step: 0.1, fmt: v => v.toFixed(1) + " s" });
+    r("start", { label: "Starts at", range: () => [0, Math.max(4.5, P.duration - 1)], step: 0.1, fmt: v => v.toFixed(1) + " s" });
     root.appendChild(card);
   });
 }
@@ -1831,7 +1856,7 @@ function buildNoises() {
   const oldp = box.querySelector(".hint"); if (oldp) oldp.remove();
   regs.noi.length = 0;
   const p = document.createElement("p"); p.className = "hint";
-  p.textContent = P.noises.length ? "Moving sources travel along their path over the 5.5 s." : "None in the classic tests.";
+  p.textContent = P.noises.length ? `Moving sources travel along their path over the ${fmtDur(P.duration)}.` : "None in the classic tests.";
   box.appendChild(p);
   const list = document.createElement("div"); list.className = "slist"; list.id = "noiList"; box.appendChild(list);
   P.noises.forEach((n0, i) => {
@@ -2113,7 +2138,7 @@ function changed(now) {
 }
 
 // ---------------------------------------------------------------- timeline
-const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / 5.5;
+const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / curDur();
 let tlHead = el("line", {});
 function drawTimeline() {
   const tl = $("tl"); tl.textContent = "";
@@ -2133,7 +2158,8 @@ function drawTimeline() {
       else if (r.motor && RES && RES.motor && RES.motor[r.motor]) {
         const vals = RES.motor[r.motor].map(Math.abs), mx = r.motor === "fan" ? Math.max(6000, ...vals) : Math.max(...vals) || 1;
         let d = `M${xs(0)} ${y + h}`;
-        vals.forEach((v, i) => { d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
+        const every = Math.max(1, Math.round(vals.length / 900));   // at most ~900 points across the timeline
+        vals.forEach((v, i) => { if (i % every === 0) d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
         d += ` L${xs((vals.length - 1) / 100)} ${y + h} Z`;
         el("path", { d, fill: "var(--noise)", "fill-opacity": 0.45, stroke: "var(--noise)", "stroke-width": 1 }, tl);
       }
@@ -2142,7 +2168,8 @@ function drawTimeline() {
   }
   const H = y + 22;
   tl.setAttribute("viewBox", `0 0 900 ${H}`);
-  for (let s = 0; s <= 5; s++) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
+  const D = curDur(), tick = D <= 6 ? 1 : D <= 12 ? 2 : D <= 30 ? 5 : D <= 60 ? 10 : 20;
+  for (let s = 0; s <= D + 1e-9; s += tick) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
   tlHead = el("line", { x1: X0, x2: X0, y1: 6, y2: H - 20, stroke: "var(--ink)", "stroke-width": 2, opacity: 0 }, tl);
 }
 
@@ -2328,7 +2355,7 @@ function tick() {
     $("ph").style.opacity = 1;
     const plots = $("plots"), cs = getComputedStyle(plots);
     const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = plots.clientWidth - l - r;
-    $("ph").style.left = (l + w * t / 5.5) + "px";
+    $("ph").style.left = (l + w * t / curDur()) + "px";
     tlHead.setAttribute("x1", xs(t)); tlHead.setAttribute("x2", xs(t)); tlHead.setAttribute("opacity", 1);
   }
   $("vTime").textContent = `${t.toFixed(2)} / ${playing.dur.toFixed(2)} s`;
@@ -2396,7 +2423,7 @@ $("plots").addEventListener("click", e => {
   if (!view) return;
   const plots = $("plots"), cs = getComputedStyle(plots), rect = plots.getBoundingClientRect();
   const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = rect.width - l - r;
-  const t = Math.max(0, Math.min(5.4, (e.clientX - rect.left - l) / w * 5.5));
+  const D = view.arr.length / 16000, t = Math.max(0, Math.min(D - 0.1, (e.clientX - rect.left - l) / w * D));
   stopAll();
   const btn = document.querySelector(`ol.tracks li[data-key="${view.key}"] .play`);
   playArray(view.key, view.arr, btn, t);
