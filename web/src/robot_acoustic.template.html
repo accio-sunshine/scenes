@@ -918,7 +918,7 @@ async function prepareSpeech(params) {   // -> {key: Float32Array} that the work
     if (s.speech === "upload") { if (uploads[s.uploadId]) extra[key] = uploads[s.uploadId]; continue; }
     if (!ttsCache[key]) {
       setStatus(true, `Synthesising speech for ${spkName(s)}…`);
-      const lib = await loadTTS(), wav = lib.speak(s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);
+      const lib = await loadTTS(), wav = lib.speak(" " + s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);   // leading space: text starting with "-" must not read as an eSpeak option
       if (!wav) throw new Error("the speech engine returned nothing for that text");
       ttsCache[key] = await toVoice16k(wav.buffer);
     }
