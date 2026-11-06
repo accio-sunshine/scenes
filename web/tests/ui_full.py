@@ -43,6 +43,7 @@ shutil.copy(PAGE, os.path.join(site, "index.html"))
 os.makedirs(os.path.join(site, "audio"))
 for d in ("sim_conversation_out", "sim_noise_out", "python_out"):
     shutil.copytree(os.path.join(ROOT, d), os.path.join(site, "audio", d))
+shutil.copytree(os.path.join(WEB, "vendor"), os.path.join(site, "vendor"))   # text-to-speech engine, loaded on demand
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass

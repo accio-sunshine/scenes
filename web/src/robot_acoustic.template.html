@@ -239,6 +239,14 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .spk:focus-visible, .spk.flash { outline: 3px solid var(--c); outline-offset: 2px; }
 .spk-h { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .spk-h b { font-size: .95rem; flex: 1 1 auto; min-width: 7em; }
+.spk-speech { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.spk-text { flex: 1 1 16em; min-width: 0; font: inherit; font-size: .88rem; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel); color: var(--ink); }
+.spk-text:focus-visible { outline: 3px solid var(--mic); outline-offset: 1px; }
+.upbtn { position: relative; display: inline-flex; align-items: center; font-size: .86rem; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 5px 11px; background: var(--panel); cursor: pointer; }
+.upbtn[hidden] { display: none; }
+.upbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.upbtn:focus-within { outline: 3px solid var(--mic); outline-offset: 2px; }
+.upname { overflow-wrap: anywhere; }
 .spk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
 @media (max-width: 560px) { .spk-grid { grid-template-columns: minmax(0, 1fr); } }
 .spk .check input { accent-color: var(--c); }
@@ -331,7 +339,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   <section aria-labelledby="h-view">
     <div class="vhead">
       <div class="vtitle"><b id="vName">Mic 1 alone</b><span id="vDesc"></span></div>
-      <div class="row"><span class="time" id="vTime">0.00 / 5.50 s</span><button class="primary" id="vPlay">Play</button></div>
+      <div class="row"><span class="time" id="vTime">0.00 s</span><button class="primary" id="vPlay">Play</button></div>
     </div>
     <div class="viewer" id="viewer">
       <svg id="tl" viewBox="0 0 900 236" role="img" aria-label="Timeline of who is talking and what the noise sources and the robot are doing"></svg>
@@ -365,7 +373,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
     </section>
   </div>
 
-  <p class="foot">Room: image sources to 3 bounces plus a statistical late tail. All ambient noise is synthesised. Levels are at mic 1 relative to Speaker 1. Python column: pyroomacoustics check of each scene's defaults (python/score_scene.py).</p>
+  <p class="foot">Room: image sources to 3 bounces plus a statistical late tail. All ambient noise is synthesised. Levels are at mic 1 relative to Speaker 1. Python column: pyroomacoustics check of each scene's defaults (python/score_scene.py). Typed speech: eSpeak via meSpeak (GNU GPL).</p>
 </main>
 
 <script id="engine">
@@ -395,7 +403,7 @@ const DEF = { rt60: 0.5, radius: 5, roomDb: 25, manAng: 40, womanAng: 150, dist:
   fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8,
   footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
 const ROBOT_KEYS = ["fanOn", "fanDb", "fanRpm", "neckOn", "neckDb", "shouldersOn", "shouldersDb", "footstepsOn", "footstepsDb", "clicksOn", "clicksDb", "humOn", "humDb"];
-const BASE = { schema: 2, scenario: "custom", roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
+const BASE = { schema: 2, scenario: "custom", duration: 5.5, roomL: 6, roomW: 5, roomH: 3, rt60: 0.5, damping: 0, roomDb: 25,
   micCount: 8, arrayShape: "ring", ringGap: 8, radius: 5, arrayH: 1.5, arrayX: 3, arrayY: 2.5, speakers: [], noises: [] };
 for (const k of ROBOT_KEYS) BASE[k] = DEF[k];
 const ROBOT_OFF = { fanOn: false, neckOn: false, shouldersOn: false, footstepsOn: false, clicksOn: false, humOn: false };
@@ -403,6 +411,9 @@ const VOICE_LIST = [["male", "male"], ["female", "female"], ["male_low", "male, 
 const voiceLabel = v => (VOICE_LIST.find(x => x[0] === v) || [v, v])[1];
 const MIC_COUNTS = [4, 6, 8, 12, 16];
 const MAX_SPK = 5;
+const DURATIONS = [3, 5.5, 10, 20, 30, 60, 90, 120];   // recording length choices, s (5.5 = the v1 / Python-checked length)
+const curDur = () => (RES && RES.duration) || P.duration || 5.5;   // length of what is on screen
+const fmtDur = d => d < 60 ? `${d} s` : `${d / 60} min`;
 const PRESETS = [
   { id: "baby", label: "Baby crying", set: { ...ROBOT_OFF }, desc: "Two people talking while a baby cries. The robot is still." },
   { id: "fan", label: "Baby + fan", set: { ...ROBOT_OFF, fanOn: true, humOn: true }, desc: "Adds the cooling fan and 50 Hz electrical hum." },
@@ -430,7 +441,7 @@ function centreArray(q) {
 }
 function fixP(q) {
   if (!Array.isArray(q.speakers) || !q.speakers.length) q.speakers = [{ voice: "male", az: 40, dist: 1.5, start: 0.3 }, { voice: "female", az: 150, dist: 1.5, start: 2.6 }];
-  q.speakers = q.speakers.slice(0, MAX_SPK).map((s, i) => ({ voice: "male", az: 0, el: 0, dist: 1.5, db: 0, start: 0, target: true, ...s, id: "s" + (i + 1) }));
+  q.speakers = q.speakers.slice(0, MAX_SPK).map((s, i) => ({ voice: "male", az: 0, el: 0, dist: 1.5, db: 0, start: 0, target: true, speech: "recording", text: "", uploadId: "", uploadName: "", ...s, id: "s" + (i + 1) }));
   q.speakers[0].db = 0;
   q.noises = (Array.isArray(q.noises) ? q.noises : []).map((n, i) => ({ label: n.gen || "noise", az: 0, el: 0, dist: 2, db: -20, on: true, path: null, ...n, id: n.id || "n" + (i + 1) }));
   if (q.arrayX == null || q.arrayY == null || q.arrayH == null) { const t = { ...q }; centreArray(t); if (q.arrayX == null) q.arrayX = t.arrayX; if (q.arrayY == null) q.arrayY = t.arrayY; if (q.arrayH == null) q.arrayH = t.arrayH; }
@@ -521,6 +532,14 @@ function buildStatic() {
   const st = regs.st;
   let g = group("Room", "");
   const num = (k, o) => mkRange(g, st, { id: "k_" + k, get: () => P[k], set: v => { P[k] = v; }, ...o });
+  const drow = document.createElement("div"); drow.className = "fieldrow"; g.appendChild(drow);
+  mkSelect(drow, st, { id: "k_duration", label: "Recording length", options: DURATIONS.map(d => [d, fmtDur(d)]), get: () => P.duration, set: v => { P.duration = +v; },
+    after: () => { for (const sp of P.speakers) sp.start = Math.min(sp.start, Math.max(4.5, P.duration - 1)); } });
+  const dnote = document.createElement("p"); dnote.className = "hint"; dnote.id = "durNote"; g.appendChild(dnote);
+  st.push(() => {   // measured in Chromium, Factory scene: 120 s took ~112 s with 8 mics, ~185 s with 16
+    const est = P.duration * (0.5 + 0.06 * P.micCount);
+    dnote.textContent = P.duration > 20 ? `Each change re-renders the whole recording: about ${est < 90 ? Math.round(est / 10) * 10 + " s" : (est / 60).toFixed(1) + " min"} at this length, and up to ~2 GB of memory at 2 min.` : "";
+    dnote.hidden = P.duration <= 20; });
   num("roomL", { label: "Length", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomW", { label: "Width", min: 1, max: 30, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
   num("roomH", { label: "Height", min: 1, max: 8, step: 0.1, fmt: v => v.toFixed(1) + " m", after: onRoomChange });
@@ -555,7 +574,7 @@ function syncMicOn() { if (micOn.length !== P.micCount) micOn = new Array(P.micC
 function addSpeaker() {
   if (P.speakers.length >= MAX_SPK) { setStatus(false, `Up to ${MAX_SPK} speakers. Remove one to add another.`); return; }
   const i = P.speakers.length;
-  P.speakers.push({ id: "s" + (i + 1), voice: ["male", "female", "male_low", "female_high", "baby"][i % 5], az: [40, 150, 250, 330, 95][i], el: 0, dist: 1.5, db: 0,
+  P.speakers.push({ id: "s" + (i + 1), speech: "recording", text: "", uploadId: "", uploadName: "", voice: ["male", "female", "male_low", "female_high", "baby"][i % 5], az: [40, 150, 250, 330, 95][i], el: 0, dist: 1.5, db: 0,
     start: [0.3, 2.6, 1.0, 3.4, 0.6][i], target: true });
   buildSpeakers(); changed(true);
 }
@@ -580,13 +599,34 @@ function buildSpeakers() {
     mkCheck(h, regs.spk, { id: `k_${sid}_target`, label: "Target", get: () => q().target, set: v => { q().target = v; } });
     const rm = document.createElement("button"); rm.className = "small"; rm.id = `rm_${sid}`; rm.textContent = "Remove";
     rm.setAttribute("aria-label", `Remove speaker ${i + 1}`); rm.disabled = P.speakers.length <= 1; rm.addEventListener("click", () => removeSpeaker(sid)); h.appendChild(rm);
+    // what the speaker says: built-in recording, typed text (synthesised) or an uploaded file
+    const sp = document.createElement("div"); sp.className = "spk-speech"; card.appendChild(sp);
+    mkSelect(sp, regs.spk, { id: `k_${sid}_speech`, label: "Speech", options: [["recording", "Recording"], ["text", "Typed text"], ["upload", "Uploaded file"]],
+      get: () => q().speech, set: v => { q().speech = v; } });
+    const tx = document.createElement("input"); tx.type = "text"; tx.id = `k_${sid}_text`; tx.maxLength = 500; tx.className = "spk-text";
+    tx.setAttribute("aria-label", `What speaker ${i + 1} says`);
+    tx.addEventListener("input", () => { q().text = tx.value; changed(); });
+    sp.appendChild(tx);
+    const up = document.createElement("label"); up.className = "upbtn";
+    up.innerHTML = `<input type="file" id="k_${sid}_file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"><span>Choose file…</span>`;
+    const fin = up.querySelector("input"), fname = document.createElement("span"); fname.className = "hint upname";
+    fin.addEventListener("change", () => { if (fin.files[0]) loadUpload(sid, fin.files[0]); fin.value = ""; });
+    sp.appendChild(up); sp.appendChild(fname);
+    regs.spk.push(() => {
+      const o = q(), baby = o.voice === "baby";
+      sp.querySelector(`option[value="text"]`).disabled = baby;
+      tx.hidden = o.speech !== "text"; up.hidden = fname.hidden = o.speech !== "upload";
+      if (document.activeElement !== tx) tx.value = o.text;
+      tx.placeholder = "Type what " + spkName(o).replace(/ \(.*/, "") + " says";
+      fname.textContent = o.uploadName ? o.uploadName + (uploads[o.uploadId] ? ` · ${(uploads[o.uploadId].length / 16000).toFixed(1)} s` : " · not loaded (choose it again)") : "No file yet.";
+    });
     const grid = document.createElement("div"); grid.className = "spk-grid"; card.appendChild(grid);
     const r = (k, o) => mkRange(grid, regs.spk, { id: `k_${sid}_${k}`, get: () => q()[k], set: v => { q()[k] = v; }, ...o });
     r("az", { label: "Azimuth", min: 0, max: 359, step: 1, fmt: deg });
     r("el", { label: "Elevation", min: -60, max: 90, step: 1, fmt: deg });
     r("dist", { label: "Distance", min: 0.3, max: 8, step: 0.05, fmt: mtr });
     r("db", { label: "Loudness", min: -30, max: 10, step: 1, fmt: v => i === 0 ? "0 dB (reference)" : dB(v), dis: () => i === 0 });
-    r("start", { label: "Starts at", min: 0, max: 4.5, step: 0.1, fmt: v => v.toFixed(1) + " s" });
+    r("start", { label: "Starts at", range: () => [0, Math.max(4.5, P.duration - 1)], step: 0.1, fmt: v => v.toFixed(1) + " s" });
     root.appendChild(card);
   });
 }
@@ -595,7 +635,7 @@ function buildNoises() {
   const oldp = box.querySelector(".hint"); if (oldp) oldp.remove();
   regs.noi.length = 0;
   const p = document.createElement("p"); p.className = "hint";
-  p.textContent = P.noises.length ? "Moving sources travel along their path over the 5.5 s." : "None in the classic tests.";
+  p.textContent = P.noises.length ? `Moving sources travel along their path over the ${fmtDur(P.duration)}.` : "None in the classic tests.";
   box.appendChild(p);
   const list = document.createElement("div"); list.className = "slist"; list.id = "noiList"; box.appendChild(list);
   P.noises.forEach((n0, i) => {
@@ -836,20 +876,76 @@ try {
   worker.onerror = () => { worker = null; };
 } catch (_) { worker = null; }
 let sentVoices = false;
-function startRender() {
+// ---- speech for "Typed text" (eSpeak, loaded on first use from vendor/scene_tts.js) and "Uploaded file"
+const uploads = {}, ttsCache = {}, sentExtra = new Set();
+const TTS_VOICE = { male: { variant: "m3", pitch: 40 }, male_low: { variant: "m1", pitch: 25 }, female: { variant: "f2", pitch: 55 }, female_high: { variant: "f4", pitch: 75 } };
+let ttsLib = null, uploadSeq = 0;
+function loadTTS() {
+  if (!ttsLib) ttsLib = new Promise((res, rej) => {
+    if (window.SceneTTS) return res(window.SceneTTS);
+    const sc = document.createElement("script"); sc.src = "vendor/scene_tts.js";
+    sc.onload = () => (window.SceneTTS ? res(window.SceneTTS) : rej(new Error("speech engine did not start")));
+    sc.onerror = () => { ttsLib = null; rej(new Error("the speech engine (vendor/scene_tts.js) is not available here; open the page from the repo, or use Uploaded file")); };
+    document.head.appendChild(sc);
+  });
+  return ttsLib;
+}
+// any audio file -> mono 16 kHz, peak-normalised and trimmed like the built-in voices (readWav(…, true))
+async function toVoice16k(buf) {
+  const ab = await new OfflineAudioContext(1, 16000, 16000).decodeAudioData(buf.slice(0));   // decodes and resamples to 16 kHz
+  const n = ab.length, x = new Float32Array(n);
+  for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < n; i++) x[i] += d[i] / ab.numberOfChannels; }
+  let m = 0; for (const v of x) m = Math.max(m, Math.abs(v));
+  if (!(m > 0)) throw new Error("the audio is silent");
+  for (let i = 0; i < n; i++) x[i] /= m;
+  let a = 0, b = n - 1; while (a < n && Math.abs(x[a]) <= 0.02) a++; while (b > a && Math.abs(x[b]) <= 0.02) b--;
+  return x.slice(Math.max(0, a - 160), b + 160);
+}
+async function loadUpload(sid, file) {
+  const s = P.speakers.find(x => x.id === sid); if (!s) return;
+  if (file.size > 60e6) { setStatus(false, `${file.name} is too large (over 60 MB).`); return; }
+  setStatus(true, `Reading ${file.name}…`);
+  try {
+    const v = await toVoice16k(await file.arrayBuffer()), id = "u" + (++uploadSeq) + "_" + file.size;
+    uploads[id] = v; s.speech = "upload"; s.uploadId = id; s.uploadName = file.name;
+    changed(true);
+  } catch (e) { setStatus(false, `Couldn't read ${file.name} as audio: ${e.message || e}. Try a WAV or MP3 file.`); }
+}
+const speechKey = s => (s.speech === "text" && s.voice !== "baby" && s.text.trim() ? "tts|" + s.voice + "|" + s.text : s.speech === "upload" && s.uploadId ? "upload|" + s.uploadId : "");
+async function prepareSpeech(params) {   // -> {key: Float32Array} that the worker does not have yet
+  const extra = {};
+  for (const s of params.speakers) {
+    const key = speechKey(s); if (!key || sentExtra.has(key)) continue;
+    if (s.speech === "upload") { if (uploads[s.uploadId]) extra[key] = uploads[s.uploadId]; continue; }
+    if (!ttsCache[key]) {
+      setStatus(true, `Synthesising speech for ${spkName(s)}…`);
+      const lib = await loadTTS(), wav = lib.speak(" " + s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);   // leading space: text starting with "-" must not read as an eSpeak option
+      if (!wav) throw new Error("the speech engine returned nothing for that text");
+      ttsCache[key] = await toVoice16k(wav.buffer);
+    }
+    extra[key] = ttsCache[key];
+  }
+  return extra;
+}
+async function startRender() {
   if (busy) { queued = true; return; }
   busy = true; queued = false;
   const id = ++reqId; latest = id;
-  setStatus(true, `Rendering the ${P.micCount} microphones…`);
   const params = clone(P); reqParams = params;
+  let extra = {};
+  try { extra = await prepareSpeech(params); }
+  catch (e) { setStatus(false, `Speech not ready: ${e.message || e}. Using the built-in recording.`); }
+  setStatus(true, `Rendering the ${P.micCount} microphones…`);
   if (worker) {
-    const msg = { id, params };
+    const msg = { id, params, extra: Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, v.slice(0)])) };
+    Object.keys(extra).forEach(k => sentExtra.add(k));
     if (!sentVoices) { msg.voiceBufs = { male: voiceBufs.male.slice(0), female: voiceBufs.female.slice(0), baby: voiceBufs.baby.slice(0) }; sentVoices = true; }
     worker.postMessage(msg);
   } else {
     setTimeout(() => {
       try {
-        const v = { male: readWav(voiceBufs.male, true).x, female: readWav(voiceBufs.female, true).x, baby: readWav(voiceBufs.baby, false).x };
+        const v = { male: readWav(voiceBufs.male, true).x, female: readWav(voiceBufs.female, true).x, baby: readWav(voiceBufs.baby, false).x,
+          extra: Object.fromEntries([...Object.entries(ttsCache), ...Object.entries(uploads).map(([k, x]) => ["upload|" + k, x])]) };
         onWorker({ id, res: render(params, v) });
       } catch (err) { onWorker({ id, error: String(err) }); }
     }, 30);
@@ -877,7 +973,7 @@ function changed(now) {
 }
 
 // ---------------------------------------------------------------- timeline
-const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / 5.5;
+const X0 = 120, X1 = 880, xs = t => X0 + (X1 - X0) * t / curDur();
 let tlHead = el("line", {});
 function drawTimeline() {
   const tl = $("tl"); tl.textContent = "";
@@ -897,7 +993,8 @@ function drawTimeline() {
       else if (r.motor && RES && RES.motor && RES.motor[r.motor]) {
         const vals = RES.motor[r.motor].map(Math.abs), mx = r.motor === "fan" ? Math.max(6000, ...vals) : Math.max(...vals) || 1;
         let d = `M${xs(0)} ${y + h}`;
-        vals.forEach((v, i) => { d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
+        const every = Math.max(1, Math.round(vals.length / 900));   // at most ~900 points across the timeline
+        vals.forEach((v, i) => { if (i % every === 0) d += ` L${xs(i / 100).toFixed(1)} ${(y + h - (h - 2) * v / mx).toFixed(1)}`; });
         d += ` L${xs((vals.length - 1) / 100)} ${y + h} Z`;
         el("path", { d, fill: "var(--noise)", "fill-opacity": 0.45, stroke: "var(--noise)", "stroke-width": 1 }, tl);
       }
@@ -906,7 +1003,8 @@ function drawTimeline() {
   }
   const H = y + 22;
   tl.setAttribute("viewBox", `0 0 900 ${H}`);
-  for (let s = 0; s <= 5; s++) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
+  const D = curDur(), tick = D <= 6 ? 1 : D <= 12 ? 2 : D <= 30 ? 5 : D <= 60 ? 10 : 20;
+  for (let s = 0; s <= D + 1e-9; s += tick) el("text", { x: xs(s), y: H - 6, "text-anchor": "middle", "font-size": 11.5, fill: "var(--soft)" }, tl, s + " s");
   tlHead = el("line", { x1: X0, x2: X0, y1: 6, y2: H - 20, stroke: "var(--ink)", "stroke-width": 2, opacity: 0 }, tl);
 }
 
@@ -1092,7 +1190,7 @@ function tick() {
     $("ph").style.opacity = 1;
     const plots = $("plots"), cs = getComputedStyle(plots);
     const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = plots.clientWidth - l - r;
-    $("ph").style.left = (l + w * t / 5.5) + "px";
+    $("ph").style.left = (l + w * t / curDur()) + "px";
     tlHead.setAttribute("x1", xs(t)); tlHead.setAttribute("x2", xs(t)); tlHead.setAttribute("opacity", 1);
   }
   $("vTime").textContent = `${t.toFixed(2)} / ${playing.dur.toFixed(2)} s`;
@@ -1160,7 +1258,7 @@ $("plots").addEventListener("click", e => {
   if (!view) return;
   const plots = $("plots"), cs = getComputedStyle(plots), rect = plots.getBoundingClientRect();
   const l = parseFloat(cs.paddingLeft), r = parseFloat(cs.paddingRight), w = rect.width - l - r;
-  const t = Math.max(0, Math.min(5.4, (e.clientX - rect.left - l) / w * 5.5));
+  const D = view.arr.length / 16000, t = Math.max(0, Math.min(D - 0.1, (e.clientX - rect.left - l) / w * D));
   stopAll();
   const btn = document.querySelector(`ol.tracks li[data-key="${view.key}"] .play`);
   playArray(view.key, view.arr, btn, t);
