@@ -346,7 +346,7 @@ web/
   vendor/scene_tts.js             eSpeak text-to-speech bundle (meSpeak 2.0.2, GNU GPL); rebuild: tools/build_tts.sh
   tools/export_scene.js           writes a scene's dry sources + geometry for the Python check
   tests/                          engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js,
-                                  ui_headless.py, ui_full.py (end-to-end, 103 checks)
+                                  ui_headless.py, ui_full.py (end-to-end, 103 checks), ui_speech.py (speech, 17 checks)
 python/
   score_scene.py                  Python check of one scene
   make_python_scores.py           runs it on every scene's defaults
@@ -362,6 +362,7 @@ node tests/engine_regression.js                   # v1 regression + engine featu
 node tests/scenarios_test.js                      # 4 scenarios, all noise generators
 python tests/ui_headless.py robot_acoustic.html   # quick load check (pip install playwright)
 python tests/ui_full.py                           # every control end to end (~10 min; CHROMIUM=/path/to/chrome if needed)
+python tests/ui_speech.py                         # typed text, uploaded speech, voices, long speech (~2 min)
 ```
 
 ---
