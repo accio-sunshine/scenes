@@ -68,8 +68,11 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 
 /* what the robot hears: top view left, readouts and controls right */
 /* array view: 2D top view and 3D view side by side, readouts and play controls underneath */
-.views { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; align-items: start; }
-@media (max-width: 880px) { .views { grid-template-columns: minmax(0, 1fr); } }
+.views { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 16px 28px; align-items: start; }
+.views.open { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; }
+.views.open .hear-side { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 12px; }
+@media (max-width: 880px) { .views, .views.open { grid-template-columns: minmax(0, 1fr); } .views .hear-side { border-top: 1px solid var(--line); padding-top: 12px; } }
+.view[hidden] { display: none; }
 .view { margin: 0; display: grid; gap: 6px; min-width: 0; }
 .view figcaption { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
 .view figcaption .hint { font-size: .78rem; }
@@ -80,7 +83,7 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 #v3 { width: 100%; max-width: 560px; aspect-ratio: 4 / 3; display: block; margin: 0 auto; border-radius: var(--r-sm); background: var(--bg); cursor: grab; touch-action: none; }
 #v3:active { cursor: grabbing; }
 #v3:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
-.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .hear-side .legend { justify-content: flex-start; }
 .hear-side .hears { text-align: left; }
 
@@ -303,19 +306,19 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
   </div>
 
   <section class="hearsec" aria-labelledby="h-head">
-    <h2 id="h-head">Array view</h2>
-    <div class="views">
+    <div class="vhead"><h2 id="h-head">Array view</h2>
+      <button type="button" id="v3toggle" aria-expanded="false" aria-controls="v3fig">Show 3D view</button></div>
+    <div class="views" id="views">
       <figure class="view">
         <figcaption><h3>Top view</h3><span class="hint" title="With a marker focused: arrow keys turn it (Shift for fine steps), + and − change distance, Page Up/Down change elevation.">0° = robot front. Drag to move; click a mic to include it.</span></figcaption>
         <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
       </figure>
-      <figure class="view">
+      <figure class="view" id="v3fig" hidden>
         <figcaption><h3>3D view</h3>
           <span class="seg" role="group" aria-label="3D view angle"><button type="button" data-v3="3d">3D</button><button type="button" data-v3="top">Top</button><button type="button" data-v3="front">Front</button><button type="button" data-v3="side">Side</button></span></figcaption>
         <canvas id="v3" tabindex="0" role="img" aria-label="3D view of the room, the robot and the sources"></canvas>
         <p class="hint" id="v3hint">Drag to turn, scroll to zoom. Drag a speaker or noise source up or down to change its height.</p>
       </figure>
-    </div>
     <div class="hear-side">
       <div class="legend" id="legend"></div>
       <p class="hears" id="hears"></p>
@@ -337,6 +340,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
         </div>
         <p class="hint" id="beepOut" aria-live="polite"></p>
       </details>
+    </div>
     </div>
   </section>
 
@@ -1003,6 +1007,16 @@ function draw3d() {
     else used = false;
     if (used) { e.preventDefault(); v3.preset = ""; draw3d(); }
   });
+  const tg = $("v3toggle"), fig = $("v3fig"), views = $("views");
+  const setOpen = open => {
+    fig.hidden = !open; views.classList.toggle("open", open);
+    tg.setAttribute("aria-expanded", open); tg.textContent = open ? "Hide 3D view" : "Show 3D view";
+    try { localStorage.setItem("sceneSim.v3open", open ? "1" : "0"); } catch (_) { /* storage blocked: still works for this visit */ }
+    if (open) requestAnimationFrame(() => draw3d());
+  };
+  tg.addEventListener("click", () => setOpen(fig.hidden));
+  let remembered = false; try { remembered = localStorage.getItem("sceneSim.v3open") === "1"; } catch (_) { /* no storage */ }
+  setOpen(remembered);
   for (const b of document.querySelectorAll("[data-v3]")) b.addEventListener("click", () => { [v3.yaw, v3.pitch] = V3_PRESETS[b.dataset.v3]; v3.zoom = 1; v3.preset = b.dataset.v3; draw3d(); });
   window.addEventListener("resize", () => draw3d());
 })();

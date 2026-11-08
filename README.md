@@ -86,8 +86,10 @@ judgement.
 
 ## 3. Array view
 
-Two views of the same scene, side by side (stacked on a phone): the **2D top view** for direction and distance, and
-the **3D view** for height. Both follow every change at once.
+Two views of the same scene: the **2D top view** for direction and distance, and the **3D view** for height. The 3D view
+is hidden at first; **Show 3D view** (top right of the section) expands it next to the top view, with the readouts and
+play controls moving underneath, and **Hide 3D view** collapses it again. The page remembers the choice in your browser.
+Both views follow every change at once.
 
 ### 2D top view
 

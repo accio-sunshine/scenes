@@ -38,6 +38,11 @@ with sync_playwright() as p:
         pg.wait_for_function("__ui.RP && JSON.stringify(__ui.RP)===JSON.stringify(__ui.P) && /^Rendered/.test(document.querySelector('#status').textContent)", timeout=180000)
 
     settled()
+    ok(pg.is_hidden("#v3") and pg.get_attribute("#v3toggle", "aria-expanded") == "false" and pg.inner_text("#v3toggle") == "Show 3D view",
+       "3D view hidden at first; button says Show 3D view")
+    pg.click("#v3toggle"); pg.wait_for_timeout(300)
+    ok(pg.is_visible("#v3") and pg.get_attribute("#v3toggle", "aria-expanded") == "true" and pg.inner_text("#v3toggle") == "Hide 3D view",
+       "clicking it expands the 3D view")
     ink = pg.evaluate("""(() => { const c = document.getElementById('v3'), g = c.getContext('2d'), d = g.getImageData(0, 0, c.width, c.height).data;
         const bg = [d[0], d[1], d[2]]; let n = 0; for (let i = 0; i < d.length; i += 16) if (Math.abs(d[i] - bg[0]) + Math.abs(d[i+1] - bg[1]) + Math.abs(d[i+2] - bg[2]) > 40) n++; return n; })()""")
     ok(ink > 500, f"3D view draws the scene ({ink} sampled pixels drawn)")
@@ -77,6 +82,11 @@ with sync_playwright() as p:
     pg.click('[data-v3="3d"]'); before = pg.get_attribute("#v3", "aria-label")
     pg.evaluate("(() => { const e = document.getElementById('k_s2_el'); e.value = 40; e.dispatchEvent(new Event('input', {bubbles: true})); })()")
     ok(pg.get_attribute("#v3", "aria-label") != before, "changing a slider updates the 3D view at once")
+    pg.reload(); pg.wait_for_function("/^Rendered/.test(document.querySelector('#status').textContent)", timeout=180000)
+    ok(pg.is_visible("#v3"), "the choice is remembered after a reload")
+    pg.click("#v3toggle"); pg.wait_for_timeout(200)
+    ok(pg.is_hidden("#v3") and pg.inner_text("#v3toggle") == "Show 3D view" and pg.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0,
+       "Hide 3D view collapses it again")
     ok(not errs, "no page errors" + (f": {errs[:3]}" if errs else ""))
     b.close()
 
