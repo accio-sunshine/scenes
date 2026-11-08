@@ -67,9 +67,20 @@ section { background: var(--panel); border: 1px solid var(--line); border-radius
 @media (max-width: 880px) { .lists { grid-template-columns: minmax(0, 1fr); } }
 
 /* what the robot hears: top view left, readouts and controls right */
-.hear-grid { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: 12px 28px; align-items: start; }
-@media (max-width: 880px) { .hear-grid { grid-template-columns: minmax(0, 1fr); } }
-.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; }
+/* array view: 2D top view and 3D view side by side, readouts and play controls underneath */
+.views { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; align-items: start; }
+@media (max-width: 880px) { .views { grid-template-columns: minmax(0, 1fr); } }
+.view { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.view figcaption { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
+.view figcaption .hint { font-size: .78rem; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-left: 1px solid var(--line); padding: 3px 10px; font-size: .78rem; background: var(--panel); }
+.seg button:first-child { border-left: 0; }
+.seg button[aria-pressed="true"] { background: var(--mic); color: var(--panel); }
+#v3 { width: 100%; max-width: 560px; aspect-ratio: 4 / 3; display: block; margin: 0 auto; border-radius: var(--r-sm); background: var(--bg); cursor: grab; touch-action: none; }
+#v3:active { cursor: grabbing; }
+#v3:focus-visible { outline: 3px solid var(--mic); outline-offset: 2px; }
+.hear-side { display: grid; gap: 12px; align-content: start; min-width: 0; border-top: 1px solid var(--line); padding-top: 12px; }
 .hear-side .legend { justify-content: flex-start; }
 .hear-side .hears { text-align: left; }
 
@@ -293,10 +304,19 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 
   <section class="hearsec" aria-labelledby="h-head">
     <h2 id="h-head">Array view</h2>
-    <div class="hear-grid">
-      <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
-      <div class="hear-side">
-      <p class="hint" title="With a marker focused: arrow keys turn it (Shift for fine steps), + and − change distance, Page Up/Down change elevation.">Top view, 0° = robot front. Drag markers to move them; click a mic to include it in the mix.</p>
+    <div class="views">
+      <figure class="view">
+        <figcaption><h3>Top view</h3><span class="hint" title="With a marker focused: arrow keys turn it (Shift for fine steps), + and − change distance, Page Up/Down change elevation.">0° = robot front. Drag to move; click a mic to include it.</span></figcaption>
+        <svg id="head" viewBox="-240 -240 480 480" role="group" aria-label="Top view: robot head with microphones, speakers and noise sources"></svg>
+      </figure>
+      <figure class="view">
+        <figcaption><h3>3D view</h3>
+          <span class="seg" role="group" aria-label="3D view angle"><button type="button" data-v3="3d">3D</button><button type="button" data-v3="top">Top</button><button type="button" data-v3="front">Front</button><button type="button" data-v3="side">Side</button></span></figcaption>
+        <canvas id="v3" tabindex="0" role="img" aria-label="3D view of the room, the robot and the sources"></canvas>
+        <p class="hint" id="v3hint">Drag to turn, scroll to zoom. Drag a speaker or noise source up or down to change its height.</p>
+      </figure>
+    </div>
+    <div class="hear-side">
       <div class="legend" id="legend"></div>
       <p class="hears" id="hears"></p>
       <div class="callout" id="warns" role="status" hidden></div>
@@ -317,7 +337,6 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
         </div>
         <p class="hint" id="beepOut" aria-live="polite"></p>
       </details>
-      </div>
     </div>
   </section>
 
@@ -1818,7 +1837,7 @@ function buildStatic() {
   num("ringGap", { label: "Gap between the two rings", min: 2, max: 20, step: 1, fmt: v => v.toFixed(0) + " cm", dis: () => P.arrayShape !== "dual_ring" });
   mkCheck(g, st, { id: "k_arrayAuto", label: "Put the array at the room centre", get: () => arrayAuto, set: v => { arrayAuto = v; }, after: () => { if (arrayAuto) centreArray(P); } });
   const free = () => { arrayAuto = false; };
-  num("arrayH", { label: "Array height above the floor", range: () => [0.2, Math.max(0.3, P.roomH - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
+  num("arrayH", { label: "Robot head (array) height above the floor", range: () => [0.2, Math.max(0.3, P.roomH - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
   num("arrayX", { label: "Array position along the length", range: () => [0.2, Math.max(0.3, P.roomL - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
   num("arrayY", { label: "Array position across the width", range: () => [0.2, Math.max(0.3, P.roomW - 0.2)], step: 0.05, fmt: v => v.toFixed(2) + " m", after: free });
 
@@ -2095,7 +2114,159 @@ function drawHead() {
     g.addEventListener("keydown", ev => entKey(ev, kind, o.id));
   }
   if (fid) { const n = document.querySelector(`[data-fid="${fid}"]`); if (n && n !== document.activeElement) n.focus({ preventScroll: true }); }
+  draw3d();
 }
+// ---------------------------------------------------------------- 3D view (canvas, own projection code; no library)
+// World: x along the room length, y across the width, z up; robot front = +x (azimuth 0). The view reads the live
+// settings (normalizeParams + the engine's own placement functions), so it follows every edit before the render ends.
+const V3_PRESETS = { "3d": [-Math.PI / 2 - 0.6, 0.42], top: [-Math.PI / 2, Math.PI / 2 - 0.001], front: [0, 0.02], side: [-Math.PI / 2, 0.02] };
+const v3 = { yaw: V3_PRESETS["3d"][0], pitch: V3_PRESETS["3d"][1], zoom: 1, preset: "3d", drag: null, items: [], cam: null };
+function v3scene() {
+  const n = normalizeParams(clone(P)), room = [n.roomL, n.roomW, n.roomH], cen = [n.arrayX, n.arrayY, n.arrayH];
+  const spk = n.speakers.map((s, i) => ({ kind: "spk", id: s.id, i, o: P.speakers[i], pos: engPlace(cen, room, s.az, s.el, s.dist, 0.2).pos, target: s.target }));
+  const noi = n.noises.map((q, i) => { const pl = engPlace(cen, room, q.az, q.el, q.dist, 0.2);
+    return { kind: "noi", id: q.id, i, o: P.noises[i], pos: pl.pos, on: q.on,
+      end: q.path ? engPlace(cen, room, q.az + (((q.path.az1 - q.az + 540) % 360) - 180), q.path.el1, q.path.dist1, 0.2).pos : null }; });
+  const rob = ["fan", "neck", "shoulders", "clicks", "footsteps"].filter(k => n[k + "On"]).map(k => ({ k, pos: engRobotPlace(cen, room, k).pos }));
+  return { n, room, cen, mics: engMicPositions(n, cen), spk, noi, rob };
+}
+// What the view frames: the robot, every source (and its floor point and path end), and the whole room when the room
+// is not much bigger than that; in a big hall (Factory) the far walls run off the edge so the scene stays readable.
+function v3fitPoints(sc) {
+  const pts = [[sc.cen[0], sc.cen[1], 0], sc.cen];
+  for (const it of [...sc.spk, ...sc.noi]) { pts.push(it.pos, [it.pos[0], it.pos[1], 0]); if (it.end) pts.push(it.end); }
+  const ext = i => Math.max(...pts.map(p => p[i])) - Math.min(...pts.map(p => p[i]));
+  const span = Math.max(2.5, ext(0), ext(1)), room = sc.room;
+  if (Math.max(room[0], room[1]) <= 1.3 * span) { for (const x of [0, room[0]]) for (const y of [0, room[1]]) for (const z of [0, room[2]]) pts.push([x, y, z]); }
+  else { const pad = 0.6; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);   // a little margin around the content, floor to ceiling
+    for (const x of [Math.min(...xs) - pad, Math.max(...xs) + pad]) for (const y of [Math.min(...ys) - pad, Math.max(...ys) + pad]) pts.push([x, y, 0], [x, y, Math.min(room[2], Math.max(...pts.map(p => p[2])) + 0.5)]); }
+  return pts;
+}
+function v3camera(w, h, room, fitPts) {
+  const { yaw, pitch } = v3, R = Math.hypot(...room) / 2;
+  const T = [0, 1, 2].map(i => (Math.min(...fitPts.map(p => p[i])) + Math.max(...fitPts.map(p => p[i]))) / 2);   // orbit around the framed scene
+  const u = [Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch)];
+  const r = [-Math.sin(yaw), Math.cos(yaw), 0], v = [-Math.sin(pitch) * Math.cos(yaw), -Math.sin(pitch) * Math.sin(yaw), Math.cos(pitch)];
+  const D = R * 3.2;
+  const raw = (q, f) => { const d = [q[0] - T[0], q[1] - T[1], q[2] - T[2]], dep = D - (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]), s = f / dep;
+    return [(d[0] * r[0] + d[1] * r[1]) * s, -(d[0] * v[0] + d[1] * v[1] + d[2] * v[2]) * s, dep, s]; };
+  // fit: scale and centre so the framed points fill ~86% of the canvas from this angle (zoom on top)
+  const cs = fitPts.map(q => raw(q, 1));
+  const x0 = Math.min(...cs.map(c => c[0])), x1 = Math.max(...cs.map(c => c[0])), y0 = Math.min(...cs.map(c => c[1])), y1 = Math.max(...cs.map(c => c[1]));
+  const f = Math.min(w * 0.86 / (x1 - x0), h * 0.82 / (y1 - y0)) * v3.zoom, ox = w / 2 - (x0 + x1) / 2 * f, oy = h / 2 - (y0 + y1) / 2 * f + h * 0.02;
+  const proj = q => { const a = raw(q, f); return [ox + a[0], oy + a[1], a[2], a[3]]; };
+  return { proj, f, pitch };
+}
+function draw3d() {
+  const cv = $("v3"); if (!cv || !cv.clientWidth) return;
+  const dpr = window.devicePixelRatio || 1, W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext("2d"), sc = v3scene(), { room, cen } = sc, cam = v3camera(W, H, room, v3fitPoints(sc)), P3 = cam.proj; v3.cam = cam;
+  const col = k => css(k), px = dpr;
+  g.clearRect(0, 0, W, H); g.fillStyle = col("--bg"); g.fillRect(0, 0, W, H);
+  g.save(); g.beginPath(); g.rect(0, 0, W, H); g.clip();
+  const line = (a, b, c, wd = 1, dash = null, alpha = 1) => { const A = P3(a), B = P3(b); g.save(); g.globalAlpha = alpha; g.strokeStyle = c; g.lineWidth = wd * px; if (dash) g.setLineDash(dash.map(x => x * px)); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.stroke(); g.restore(); };
+  const text = (q, t, c, size = 11, dx = 0, dy = 0, align = "center") => { const A = P3(q); g.fillStyle = c; g.font = `${600} ${size * px}px ${col("--sans") || "sans-serif"}`; g.textAlign = align; g.fillText(t, A[0] + dx * px, A[1] + dy * px); };
+  // floor grid and room box
+  const [L, Wd, Hh] = room, step = Math.max(L, Wd) > 12 ? 5 : Math.max(L, Wd) > 6 ? 2 : 1;
+  for (let x = 0; x <= L + 1e-9; x += step) line([x, 0, 0], [x, Wd, 0], col("--line"), 1);
+  for (let y = 0; y <= Wd + 1e-9; y += step) line([0, y, 0], [L, y, 0], col("--line"), 1);
+  const C = [[0, 0, 0], [L, 0, 0], [L, Wd, 0], [0, Wd, 0]];
+  for (let k = 0; k < 4; k++) { const a = C[k], b = C[(k + 1) % 4]; line(a, b, col("--soft"), 1.4); line([a[0], a[1], Hh], [b[0], b[1], Hh], col("--soft"), 1, [4, 4], 0.6); line(a, [a[0], a[1], Hh], col("--soft"), 1, [4, 4], 0.6); }
+  text([L / 2, 0, 0], `${L} m`, col("--soft"), 10, 0, 14); text([0, Wd / 2, 0], `${Wd} m`, col("--soft"), 10, -18, 4); text([0, 0, Hh / 2], `${Hh} m`, col("--soft"), 10, -16, 0, "right");
+  // everything with a depth, drawn far to near
+  const items = [];
+  const hd = (o, pos) => pos[2];   // height above the floor
+  // robot: body from the floor to the neck, shoulders, head, nose (front), mics, body noise sources
+  items.push({ dep: P3([cen[0], cen[1], cen[2] * 0.5])[2] + 0.01, draw: () => {
+    const torsoTop = Math.max(0.05, cen[2] - 0.16), A = P3([cen[0], cen[1], 0]), B = P3([cen[0], cen[1], torsoTop]);
+    g.lineCap = "round"; g.globalAlpha = 0.55; g.strokeStyle = col("--soft"); g.lineWidth = Math.max(5 * px, 0.26 * B[3]); g.beginPath(); g.moveTo(A[0], A[1]); g.lineTo(B[0], B[1]); g.stroke();
+    const sh = Math.max(0.05, cen[2] - 0.3), S1 = P3([cen[0], cen[1] - 0.2, sh]), S2 = P3([cen[0], cen[1] + 0.2, sh]);
+    g.lineWidth = Math.max(3 * px, 0.09 * B[3]); g.beginPath(); g.moveTo(S1[0], S1[1]); g.lineTo(S2[0], S2[1]); g.stroke(); g.globalAlpha = 1;
+    g.lineCap = "butt"; } });
+  items.push({ dep: P3(cen)[2], draw: () => {
+    const A = P3(cen), rr = Math.max(7 * px, 0.12 * A[3]);
+    g.fillStyle = col("--head"); g.strokeStyle = col("--ink"); g.lineWidth = 1.5 * px; g.beginPath(); g.arc(A[0], A[1], rr, 0, 2 * Math.PI); g.fill(); g.stroke();
+    line(cen, [cen[0] + 0.22, cen[1], cen[2]], col("--ink"), 2);
+    text([cen[0] + 0.32, cen[1], cen[2]], "front", col("--soft"), 9, 0, 3);
+    const n = sc.mics.length;
+    sc.mics.forEach((m, i) => { const M = P3(m); g.fillStyle = micOn[i] !== false ? col("--mic") : col("--micoff"); g.beginPath(); g.arc(M[0], M[1], 2.4 * px, 0, 2 * Math.PI); g.fill(); });
+    g.strokeStyle = col("--mic"); g.lineWidth = 1 * px; g.globalAlpha = 0.5; g.beginPath();
+    sc.mics.forEach((m, i) => { const M = P3(m); if (i === 0 || (sc.n.arrayShape === "dual_ring" && i === n / 2)) g.moveTo(M[0], M[1]); else g.lineTo(M[0], M[1]); });
+    g.stroke(); g.globalAlpha = 1; } });
+  for (const b of sc.rob) items.push({ dep: P3(b.pos)[2], draw: () => { const A = P3(b.pos); g.fillStyle = col("--noise"); g.globalAlpha = 0.8; g.fillRect(A[0] - 3 * px, A[1] - 3 * px, 6 * px, 6 * px); g.globalAlpha = 1; } });
+  // where the robot thinks sound comes from
+  for (const pk of (RES && RES.srp && RES.srp.peaks) || []) {
+    const a = pk.az * RAD, e = (pk.el || 0) * RAD, tip = [cen[0] + 1.3 * Math.cos(e) * Math.cos(a), cen[1] + 1.3 * Math.cos(e) * Math.sin(a), cen[2] + 1.3 * Math.sin(e)];
+    items.push({ dep: P3(tip)[2], draw: () => { line(cen, tip, col("--srp"), 1.6, [3, 3]); const A = P3(tip); g.fillStyle = col("--srp"); g.beginPath(); g.arc(A[0], A[1], 3 * px, 0, 2 * Math.PI); g.fill(); } });
+  }
+  // sources: drop-line to the floor, floor mark, body, label
+  const v3items = [];
+  const src = (it, color, shape, label, on) => {
+    const A = P3(it.pos);
+    items.push({ dep: A[2], draw: () => {
+      line([it.pos[0], it.pos[1], 0], it.pos, color, 1, [2, 3], on ? 0.9 : 0.4);
+      const F = P3([it.pos[0], it.pos[1], 0]); g.strokeStyle = color; g.globalAlpha = on ? 0.8 : 0.35; g.lineWidth = 1 * px; g.beginPath(); g.ellipse(F[0], F[1], 4 * px, 2 * px, 0, 0, 2 * Math.PI); g.stroke(); g.globalAlpha = 1;
+      if (it.end) { line(it.pos, it.end, color, 1.2, [5, 3], on ? 0.8 : 0.3); const E = P3(it.end); g.strokeStyle = color; g.beginPath(); g.arc(E[0], E[1], 3.5 * px, 0, 2 * Math.PI); g.stroke(); }
+      const rr = Math.max(7 * px, Math.min(16 * px, 0.14 * A[3]));
+      g.lineWidth = 2 * px; g.strokeStyle = on ? color : col("--micoff"); g.fillStyle = color;
+      g.beginPath(); if (shape === "dia") { g.moveTo(A[0], A[1] - rr); g.lineTo(A[0] + rr, A[1]); g.lineTo(A[0], A[1] + rr); g.lineTo(A[0] - rr, A[1]); g.closePath(); } else g.arc(A[0], A[1], rr, 0, 2 * Math.PI);
+      g.globalAlpha = shape === "dia" ? (on ? 0.25 : 0) : (it.target === false ? 0 : 1); g.fill(); g.globalAlpha = 1; g.stroke();
+      g.fillStyle = shape === "dia" || it.target === false ? color : "#fff"; g.font = `700 ${(shape === "dia" ? 9 : 11) * px}px ${col("--sans") || "sans-serif"}`; g.textAlign = "center"; g.fillText(label, A[0], A[1] + 4 * px);
+      g.fillStyle = col("--soft"); g.font = `500 ${9.5 * px}px ${col("--mono") || "monospace"}`; g.textAlign = "left"; g.fillText(`${it.pos[2].toFixed(2)} m`, A[0] + rr + 3 * px, A[1] - rr * 0.4);
+    } });
+    v3items.push({ it, x: A[0], y: A[1], r: Math.max(9 * px, Math.min(16 * px, 0.14 * A[3])) });
+  };
+  for (const it of sc.noi) src(it, col("--noise"), "dia", "N" + (it.i + 1), it.on);
+  for (const it of sc.spk) src(it, col(`--s${it.i + 1}`), "dot", String(it.i + 1), true);
+  items.sort((a, b) => b.dep - a.dep).forEach(x => x.draw());
+  g.restore();
+  v3.items = v3items;
+  const flat = Math.cos(v3.pitch) < 0.25;
+  $("v3hint").textContent = flat ? "Seen from above. Turn the view (drag, or Front/Side) to change heights by dragging."
+    : "Drag to turn, scroll to zoom. Drag a speaker or noise source up or down to change its height (number = height above the floor).";
+  cv.setAttribute("aria-label", `3D view of a ${L} × ${Wd} × ${Hh} m room. Robot head (array) ${cen[2].toFixed(2)} m above the floor. `
+    + sc.spk.map(s => `Speaker ${s.i + 1} ${s.pos[2].toFixed(2)} m`).join(", ") + (sc.noi.length ? ". " + sc.noi.map(q => `N${q.i + 1} ${q.pos[2].toFixed(2)} m`).join(", ") : "") + ".");
+  for (const b of document.querySelectorAll("[data-v3]")) b.setAttribute("aria-pressed", b.dataset.v3 === v3.preset);
+}
+(function v3setup() {
+  const cv = $("v3"); if (!cv) return;
+  const pt = e => { const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1; return [(e.clientX - r.left) * d, (e.clientY - r.top) * d]; };
+  cv.addEventListener("pointerdown", e => {
+    const [x, y] = pt(e), hit = v3.items.slice().reverse().find(h => Math.hypot(h.x - x, h.y - y) <= h.r + 4);
+    const canLift = Math.cos(v3.pitch) >= 0.25;
+    v3.drag = hit && canLift ? { mode: "lift", it: hit.it, y0: y, z0: hit.it.pos[2], moved: false } : { mode: "orbit", x0: x, y0: y, yaw0: v3.yaw, pitch0: v3.pitch, moved: false };
+    try { cv.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone */ }
+    e.preventDefault();
+  });
+  cv.addEventListener("pointermove", e => {
+    const d = v3.drag; if (!d) return;
+    const [x, y] = pt(e);
+    if (d.mode === "orbit") {
+      v3.yaw = d.yaw0 - (x - d.x0) * 0.008; v3.pitch = clamp(d.pitch0 + (y - d.y0) * 0.008, -0.15, Math.PI / 2 - 0.001); v3.preset = ""; draw3d(); return;
+    }
+    // lift: vertical drag changes the source's height, keeping its direction around the robot and its horizontal distance
+    const it = d.it, o = it.o, cam = v3.cam, A = cam.proj(it.pos), wpp = 1 / A[3];
+    const z = clamp(d.z0 - (y - d.y0) * wpp / Math.max(0.25, Math.cos(v3.pitch)), 0.2, P.roomH - 0.2);
+    const n = normalizeParams(clone(P)), cen = [n.arrayX, n.arrayY, n.arrayH], hz = Math.max(0.05, Math.hypot(it.pos[0] - cen[0], it.pos[1] - cen[1]));
+    const dz = z - cen[2], el = clamp(Math.round(Math.atan2(dz, hz) / RAD), -60, 90), dmax = it.kind === "spk" ? 8 : 20;
+    o.el = el; o.dist = clamp(+(hz / Math.max(0.05, Math.cos(el * RAD))).toFixed(2), 0.3, dmax); d.moved = true;
+    syncKnobs(); drawHead();
+  });
+  const end = () => { const d = v3.drag; v3.drag = null; if (d && d.mode === "lift" && d.moved) changed(); };
+  cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  cv.addEventListener("wheel", e => { e.preventDefault(); v3.zoom = clamp(v3.zoom * Math.exp(-e.deltaY * 0.0012), 0.5, 4); draw3d(); }, { passive: false });
+  cv.addEventListener("keydown", e => {
+    const k = e.key; let used = true;
+    if (k === "ArrowLeft") v3.yaw += 0.1; else if (k === "ArrowRight") v3.yaw -= 0.1;
+    else if (k === "ArrowUp") v3.pitch = clamp(v3.pitch + 0.08, -0.15, Math.PI / 2 - 0.001); else if (k === "ArrowDown") v3.pitch = clamp(v3.pitch - 0.08, -0.15, Math.PI / 2 - 0.001);
+    else if (k === "+" || k === "=") v3.zoom = clamp(v3.zoom * 1.15, 0.5, 4); else if (k === "-" || k === "_") v3.zoom = clamp(v3.zoom / 1.15, 0.5, 4);
+    else used = false;
+    if (used) { e.preventDefault(); v3.preset = ""; draw3d(); }
+  });
+  for (const b of document.querySelectorAll("[data-v3]")) b.addEventListener("click", () => { [v3.yaw, v3.pitch] = V3_PRESETS[b.dataset.v3]; v3.zoom = 1; v3.preset = b.dataset.v3; draw3d(); });
+  window.addEventListener("resize", () => draw3d());
+})();
 function findEnt(d) { return (d.kind === "spk" ? P.speakers : P.noises).find(x => x.id === d.id); }
 function entKey(e, kind, id) {
   const o = findEnt({ kind, id }); if (!o) return;
@@ -2788,6 +2959,6 @@ drawHead(); drawLegend(); buildPyList(); syncPyList();
 let resizeT = null;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
-window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; } };
+window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; }, get v3() { return v3; } };
 })();
 </script>

@@ -43,7 +43,7 @@ From top to bottom:
 |---|---|
 | Header | Name, subtitle and a two-sentence introduction. |
 | Scene row | Scene tabs (Home, Factory, Hospital, Automobile, Custom) and the selected scene's description. |
-| Array view | Top view of the robot head with microphones, speakers and noise sources; legend; where the robot thinks sound comes from; play controls. |
+| Array view | 2D top view and 3D view side by side, then the legend, where the robot thinks sound comes from, and the play controls. |
 | Scene setup | All settings, in two columns: Room, Microphones, Speakers (left); Noise sources, Robot's own noise (right). |
 | Scores | Target-vs-everything-else scores per speaker and method, with the Python check. Download button. |
 | Signal viewer | Timeline of who is talking and what the robot is doing, plus the waveform and spectrogram of the selected track. |
@@ -86,6 +86,11 @@ judgement.
 
 ## 3. Array view
 
+Two views of the same scene, side by side (stacked on a phone): the **2D top view** for direction and distance, and
+the **3D view** for height. Both follow every change at once.
+
+### 2D top view
+
 The top view shows the robot head at the centre, its microphones on the rim, distance rings (1 m, 2 m, …), the room
 outline as seen from the array, speakers (numbered circles), ambient noise sources (diamonds N1…), the robot's own
 noise sources (chips on the head) and red arrows where the robot thinks sound comes from (SRP-PHAT direction finding).
@@ -105,6 +110,30 @@ drawn as a dashed red ring, and a "Heads up" note lists what moved.
 **"Robot hears sound from"** lists the directions found by SRP-PHAT (one per speaker) next to the true speaker
 directions. A flat ring cannot tell elevation, so it reports azimuth only; a dual ring also reports elevation
 (15° steps).
+
+### 3D view
+
+A perspective view of the room (wireframe box, 1 m floor grid, dimensions on the edges) with:
+
+- **the robot:** body from the floor up to the head at the array height, shoulders, a "front" mark, the microphone ring
+  (both rings for a dual ring; mics excluded from the mix drawn grey) and its body noise sources (small squares);
+- **speakers** (numbered spheres) and **ambient noise sources** (diamonds) at their real 3D positions, each with a dashed
+  drop-line to a mark on the floor and its **height above the floor** in metres; moving sources show their path;
+- **red dashed arrows:** where the robot thinks sound comes from (tilted with a dual ring, level with a flat ring).
+
+| Action | Effect |
+|---|---|
+| Drag empty space | Turn the view. |
+| Scroll | Zoom. |
+| Drag a speaker or noise source up/down | Change its height: its direction around the robot and horizontal distance stay; elevation and distance follow. Not in the Top preset (dragging turns the view there). |
+| 3D / Top / Front / Side | Preset angles. Front looks at the robot's face; Side looks from the robot's right, front to the right as in the top view. |
+| Keyboard, with the view focused | Arrow keys turn it; `+` / `−` zoom. |
+
+The view frames the robot and every source, and the whole room when the room is not much bigger than that; in a big
+hall the far walls run off the edge. The room model is an empty box: anything drawn in the room is a source or the
+robot, not an obstacle.
+
+### Controls under the views
 
 | Button | Effect |
 |---|---|
@@ -141,7 +170,7 @@ Changing the room size re-centres the array while "Put the array at the room cen
 | **Ring radius** | 3 – 10 cm | 5 cm | Radius of the ring(s). |
 | **Gap between the two rings** | 2 – 20 cm | 8 cm | Vertical distance between the rings (dual ring only). Gaps much above ~5 cm alias at the top of the direction-finding band (3.5 kHz). |
 | **Put the array at the room centre** | on / off | on | Keeps the array at the room's centre, at half the room height limited to 1.2–1.5 m. |
-| **Array height above the floor** | 0.2 m to height − 0.2 m | 1.5 m | Moving it unticks "room centre". |
+| **Robot head (array) height above the floor** | 0.2 m to height − 0.2 m | 1.5 m | The robot's head height; the 3D view draws its body from the floor up to it. Moving it unticks "room centre". |
 | **Array position along the length / across the width** | 0.2 m to size − 0.2 m | room centre | Moving it unticks "room centre". |
 
 The mics are kept at least 0.2 m inside the room; the page says when it had to move the array.
@@ -354,7 +383,8 @@ web/
   tools/export_scene.js           writes a scene's dry sources + geometry for the Python check
   tests/                          engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js,
                                   ui_headless.py, ui_full.py (end-to-end, 103 checks), ui_speech.py (speech, 17 checks),
-                                  ui_record.py (live recording, 13 checks)
+                                  ui_record.py (live recording, 13 checks),
+                                  ui_3d.py (3D view, 16 checks)
 python/
   score_scene.py                  Python check of one scene
   make_python_scores.py           runs it on every scene's defaults
@@ -372,6 +402,7 @@ python tests/ui_headless.py robot_acoustic.html   # quick load check (pip instal
 python tests/ui_full.py                           # every control end to end (~10 min; CHROMIUM=/path/to/chrome if needed)
 python tests/ui_speech.py                         # typed text, uploaded speech, voices, long speech (~2 min)
 python tests/ui_record.py                         # live recording with a fake microphone (~1 min)
+python tests/ui_3d.py                             # 3D view: drawing, presets, orbit, zoom, height dragging (~1 min)
 ```
 
 ---
@@ -383,6 +414,6 @@ python tests/ui_record.py                         # live recording with a fake m
   draw of the echo tail (up to ~2.5 dB in a small room); this uncertainty is not shown on the page.
 - A flat ring cannot resolve elevation; the dual ring estimates it coarsely.
 - Footsteps are approximate (see section 8).
-- No side view: elevation is set with sliders or Page Up/Down on a marker.
+- The room is an empty box: there is no way yet to place tables, shelves or balconies, and nothing in the room blocks or reflects sound except the walls, floor and ceiling.
 - Long recordings (over ~30 s) render slowly and use a lot of memory; every change re-renders the whole recording.
 - The Python column and recordings cover only each scene's default settings at 5.5 s.

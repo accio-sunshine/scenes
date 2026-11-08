@@ -18,7 +18,8 @@ scenes/
 │   │   └── robot_acoustic.template.html  # UI template
 │   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py,
 │                                 # ui_full.py (end-to-end: every scene/knob/button/track/download + Python column; CHROMIUM=... in cloud, ~10 min),
-│                                 # ui_speech.py (typed text / uploaded speech, ~2 min), ui_record.py (live recording, ~1 min)
+│                                 # ui_speech.py (typed text / uploaded speech, ~2 min), ui_record.py (live recording, ~1 min),
+│                                 # ui_3d.py (3D view, ~1 min)
 ├── voices/                       # male.wav, female.wav, baby.wav (base64'd into page)
 ├── python/                       # score_scene.py (Python cross-check), make_python_scores.py
 ├── python_out/<scene>/           # Python audio of the 4 scenarios (make_python_scores.py), played by the page
@@ -35,7 +36,7 @@ scenes/
 | **Speakers** | Up to 5, each with voice, azimuth 0-359°, elevation -60..+90°, distance, loudness, start time, target on/off |
 | **Noise sources** | Per-scenario list, on/off, level, position; moving sources tagged |
 | **Microphones** | 4/6/8/12/16, ring or dual-ring, radius, array height/position. **Warning shown when count ≠ 8** (PDM pipeline needs 8) |
-| **Views** | Top view (drag/keyboard) + elevation sliders (side view not implemented) |
+| **Views** | 2D top view (drag/keyboard) + 3D view (canvas, own projection: orbit, zoom, Top/Front/Side presets, drag a source up/down to set its height) |
 | **Output** | Zip with `mics/mic1..micN.wav`, `settings.json` (schema 2), `scores.csv` (long format) |
 
 ## Key Files for Continuing
@@ -50,7 +51,7 @@ scenes/
 
 ## Known Gaps (as of 2026-10-10)
 
-- **Side view** for elevation: not built. Elevation set via sliders or Page Up/Down on a marker only. **Next step.**
+- **Objects in the room** (tables, shelves, balconies): not modelled; the room is an empty box (3D view added 2026-11-08 replaces the planned side view).
 - **Python comparison column** and zip contents in "Custom" not checked.
 - **All ambience is synthesised**: no recorded rooms/machines/cars. Realism is qualitative only.
 - **SRP elevation**: a planar ring reports `el: null` (it can't resolve elevation). Dual ring estimates it in 15° steps;
