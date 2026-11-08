@@ -85,3 +85,6 @@ scenes/
 ## Push to GitHub
 
 The GitHub remote is `https://github.com/accio-sunshine/scenes`.
+
+**Work on the branch only.** Commit and push to `claude/practical-darwin-1g86qw`. Do not push or merge to `main` until
+the user says so (user instruction, 2026-11-08).
