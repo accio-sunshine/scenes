@@ -2833,6 +2833,6 @@ drawHead(); drawLegend(); buildPyList(); syncPyList();
 let resizeT = null;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
-window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; } };
+window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; }, KOKORO_VOICE };   // KOKORO_VOICE: test hook (voice checks swap a slot's voice before a render)
 })();
 </script>
