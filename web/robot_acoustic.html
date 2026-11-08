@@ -244,6 +244,7 @@ select:focus-visible, summary:focus-visible, .card:focus-visible { outline: 3px 
 .spk-text:focus-visible { outline: 3px solid var(--mic); outline-offset: 1px; }
 .upbtn { position: relative; display: inline-flex; align-items: center; font-size: .86rem; border: 1px solid var(--line); border-radius: var(--r-sm); padding: 5px 11px; background: var(--panel); cursor: pointer; }
 .upbtn[hidden] { display: none; }
+.recbtn[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); color: var(--panel); }
 .upbtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .upbtn:focus-within { outline: 3px solid var(--mic); outline-offset: 2px; }
 .upname { overflow-wrap: anywhere; }
@@ -579,7 +580,7 @@ function normalizeParams(p0) {
     s.dist = engClamp(Number(s.dist) || 1.5, 0.3, 8); s.db = i === 0 ? 0 : (Number.isFinite(Number(s.db)) ? Number(s.db) : 0);
     s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     s.text = String(s.text == null ? "" : s.text).slice(0, 500); s.uploadId = String(s.uploadId || ""); s.uploadName = String(s.uploadName || "");
-    s.speech = ["text", "upload"].includes(s.speech) ? s.speech : "recording";
+    s.speech = ["text", "upload", "record"].includes(s.speech) ? s.speech : "recording";
     if (s.speech === "text" && (s.voice === "baby" || !s.text.trim())) s.speech = "recording";   // no text-to-speech for the baby
     return s;
   });
@@ -939,7 +940,8 @@ function engResample(x, f) {   // linear interpolation, reads x at f samples per
 }
 // What a speaker says: "recording" (the built-in voice files), "text" (speech synthesised by the page from s.text) or
 // "upload" (a file the user gave the page). The page puts the 16 kHz samples for text/upload in voices.extra[key].
-function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : s.speech === "upload" ? "upload|" + s.uploadId : ""; }
+// "record" (a live microphone recording made in the page) is stored and keyed like an upload.
+function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
 function engVoice(name, voices, cache) {
   if (name === "male_low") return cache.male_low || (cache.male_low = engResample(voices.male, 0.85));
   if (name === "female_high") return cache.female_high || (cache.female_high = engResample(voices.female, 1.15));
@@ -977,7 +979,7 @@ function render(p0, voices, progress = () => {}) {
     const label = "Speaker " + (i + 1) + " (" + s.voice.replace("_", " ") + ")";
     const pl = engPlace(cen, room, s.az, s.el, s.dist, p._legacy ? 0.1 : 0.2); note(label, pl);   // legacy v1 scenes may sit 0.15 m from a wall
     const key = engSpeechKey(s), own = key && voices.extra && voices.extra[key];
-    if (key && !own) warnings.push(label + ": the " + (s.speech === "text" ? "typed text" : "uploaded file") + " is not ready, so the built-in recording is used.");
+    if (key && !own) warnings.push(label + ": the " + (s.speech === "text" ? "typed text" : s.speech === "record" ? "live recording" : "uploaded file") + " is not ready, so the built-in recording is used.");
     const v = own || engVoice(s.voice, voices, vcache), st = Math.round(s.start * FS);
     if (s.voice !== "baby" && s.start + v.length / FS > DUR + 1e-9) warnings.push(label + "'s speech is " + (v.length / FS).toFixed(1) + " s long and runs past the end of the recording, so it is cut at " + DUR + " s.");
     let sig;
@@ -1861,8 +1863,11 @@ function buildSpeakers() {
     rm.setAttribute("aria-label", `Remove speaker ${i + 1}`); rm.disabled = P.speakers.length <= 1; rm.addEventListener("click", () => removeSpeaker(sid)); h.appendChild(rm);
     // what the speaker says: built-in recording, typed text (synthesised) or an uploaded file
     const sp = document.createElement("div"); sp.className = "spk-speech"; card.appendChild(sp);
-    mkSelect(sp, regs.spk, { id: `k_${sid}_speech`, label: "Speech", options: [["recording", "Recording"], ["text", "Typed text"], ["upload", "Uploaded file"]],
-      get: () => q().speech, set: v => { q().speech = v; } });
+    mkSelect(sp, regs.spk, { id: `k_${sid}_speech`, label: "Speech", options: [["recording", "Recording"], ["text", "Typed text"], ["upload", "Uploaded file"], ["record", "Live recording"]],
+      get: () => q().speech, set: v => {   // an uploaded file and a live recording never stand in for each other
+        const o = q(), fromMic = o.uploadName.startsWith("Live");
+        if ((v === "record" && !fromMic) || (v === "upload" && fromMic)) { o.uploadId = ""; o.uploadName = ""; }
+        o.speech = v; } });
     const tx = document.createElement("input"); tx.type = "text"; tx.id = `k_${sid}_text`; tx.maxLength = 500; tx.className = "spk-text";
     tx.setAttribute("aria-label", `What speaker ${i + 1} says`);
     tx.addEventListener("input", () => { q().text = tx.value; changed(); });
@@ -1871,14 +1876,25 @@ function buildSpeakers() {
     up.innerHTML = `<input type="file" id="k_${sid}_file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a"><span>Choose file…</span>`;
     const fin = up.querySelector("input"), fname = document.createElement("span"); fname.className = "hint upname";
     fin.addEventListener("change", () => { if (fin.files[0]) loadUpload(sid, fin.files[0]); fin.value = ""; });
-    sp.appendChild(up); sp.appendChild(fname);
+    const rec = document.createElement("button"); rec.className = "small recbtn"; rec.id = `rec_${sid}`; rec.type = "button";
+    rec.addEventListener("click", () => toggleRecord(sid));
+    sp.appendChild(up); sp.appendChild(rec); sp.appendChild(fname);
     regs.spk.push(() => {
       const o = q(), baby = o.voice === "baby";
       sp.querySelector(`option[value="text"]`).disabled = baby;
-      tx.hidden = o.speech !== "text"; up.hidden = fname.hidden = o.speech !== "upload";
+      tx.hidden = o.speech !== "text"; up.hidden = o.speech !== "upload"; rec.hidden = o.speech !== "record";
+      fname.hidden = o.speech !== "upload" && o.speech !== "record";
+      const live = recState && recState.sid === sid;
+      rec.textContent = live ? `■ Stop (${recState.secs.toFixed(1)} s)` : (o.uploadId && o.speech === "record" && o.uploadName.startsWith("Live") ? "● Record again" : "● Record");
+      rec.setAttribute("aria-pressed", live ? "true" : "false");
       if (document.activeElement !== tx) tx.value = o.text;
       tx.placeholder = "Type what " + spkName(o).replace(/ \(.*/, "") + " says";
-      fname.textContent = o.uploadName ? o.uploadName + (uploads[o.uploadId] ? ` · ${(uploads[o.uploadId].length / 16000).toFixed(1)} s` : " · not loaded (choose it again)") : "No file yet.";
+      const fromMic = o.uploadName.startsWith("Live");
+      fname.textContent = (o.speech === "record") !== fromMic && o.uploadName ? (o.speech === "record" ? "Nothing recorded yet." : "No file yet.")
+        : o.uploadName ? o.uploadName + (uploads[o.uploadId] ? ` · ${(uploads[o.uploadId].length / 16000).toFixed(1)} s` : (fromMic ? " · lost on reload (record again)" : " · not loaded (choose it again)"))
+        : (o.speech === "record" ? "Nothing recorded yet." : "No file yet.");
+      if (o.speech === "record" && recNote[sid]) fname.textContent = recNote[sid];
+      fname.classList.toggle("err", o.speech === "record" && !!recNote[sid]);
     });
     const grid = document.createElement("div"); grid.className = "spk-grid"; card.appendChild(grid);
     const r = (k, o) => mkRange(grid, regs.spk, { id: `k_${sid}_${k}`, get: () => q()[k], set: v => { q()[k] = v; }, ...o });
@@ -2171,12 +2187,48 @@ async function loadUpload(sid, file) {
     changed(true);
   } catch (e) { setStatus(false, `Couldn't read ${file.name} as audio: ${e.message || e}. Try a WAV or MP3 file.`); }
 }
-const speechKey = s => (s.speech === "text" && s.voice !== "baby" && s.text.trim() ? "tts|" + s.voice + "|" + s.text : s.speech === "upload" && s.uploadId ? "upload|" + s.uploadId : "");
+// ---- live recording from the microphone. Works where the browser allows the microphone (the page opened from your own
+// computer, e.g. http://localhost); the claude.ai viewer refuses it, and the page says so.
+let recState = null;   // { sid, rec, stream, chunks, secs, timer }
+const recNote = {};    // per speaker: last recording problem, shown on its card (the status line is overwritten by renders)
+function recFail(sid, msg) { recNote[sid] = msg; setStatus(false, msg); syncKnobs(); }
+async function toggleRecord(sid) {
+  if (recState) { const same = recState.sid === sid; recState.rec.stop(); if (same) return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+    recFail(sid, "This browser cannot record here. Open the page from your computer (python -m http.server) or use Uploaded file."); return;
+  }
+  let stream;
+  try {   // processing off, so the voice is as the microphone heard it
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 } });
+  } catch (e) {
+    recFail(sid, `Microphone not available (${e.name || e}). In the claude.ai viewer the microphone is blocked: open the page from your computer (python -m http.server), or record elsewhere and use Uploaded file.`);
+    return;
+  }
+  delete recNote[sid];
+  const rec = new MediaRecorder(stream), chunks = [], maxS = Math.min(120, P.duration);
+  recState = { sid, rec, stream, chunks, secs: 0, timer: null };
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    const st = recState; clearInterval(st.timer); st.stream.getTracks().forEach(t => t.stop()); recState = null; syncKnobs();
+    const s = P.speakers.find(x => x.id === sid); if (!s || !chunks.length) return;
+    try {
+      const v = await toVoice16k(await new Blob(chunks, { type: rec.mimeType }).arrayBuffer()), id = "r" + (++uploadSeq);
+      uploads[id] = v; s.speech = "record"; s.uploadId = id;
+      s.uploadName = `Live recording ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+      changed(true);
+    } catch (e) { recFail(sid, `The recording could not be used: ${e.message || e}. Try again, a little closer to the microphone.`); }
+  };
+  rec.start(250);
+  setStatus(false, `Recording ${spkName(P.speakers.find(x => x.id === sid))}… press Stop when done (stops by itself at ${maxS} s).`);
+  recState.timer = setInterval(() => { if (!recState) return; recState.secs += 0.2; if (recState.secs >= maxS) recState.rec.stop(); syncKnobs(); }, 200);
+  syncKnobs();
+}
+const speechKey = s => (s.speech === "text" && s.voice !== "baby" && s.text.trim() ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") && s.uploadId ? "upload|" + s.uploadId : "");
 async function prepareSpeech(params) {   // -> {key: Float32Array} that the worker does not have yet
   const extra = {};
   for (const s of params.speakers) {
     const key = speechKey(s); if (!key || sentExtra.has(key)) continue;
-    if (s.speech === "upload") { if (uploads[s.uploadId]) extra[key] = uploads[s.uploadId]; continue; }
+    if (s.speech === "upload" || s.speech === "record") { if (uploads[s.uploadId]) extra[key] = uploads[s.uploadId]; continue; }
     if (!ttsCache[key]) {
       setStatus(true, `Synthesising speech for ${spkName(s)}…`);
       const lib = await loadTTS(), wav = lib.speak(" " + s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);   // leading space: text starting with "-" must not read as an eSpeak option

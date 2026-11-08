@@ -157,7 +157,7 @@ deletes one (the others are renumbered). Each speaker has a colour used everywhe
 |---|---|---|
 | **Voice** | male, female, male low, female high, baby | Built-in voices are MBROLA text-to-speech recordings ("Hi there, how are you doing today?" / "I'm good. What is the plan for the day?"). Male low and female high are pitch-shifted copies of male and female. The baby is a looping synthetic cry. |
 | **Target** | on / off | A **target** is beamformed and scored. An **interferer** (off) only adds sound to the scene; it is drawn as an outline and not scored. |
-| **Speech** | Recording, Typed text, Uploaded file | What the speaker says (see below). |
+| **Speech** | Recording, Typed text, Uploaded file, Live recording | What the speaker says (see below). |
 | **Azimuth** | 0 – 359° | Direction around the robot. |
 | **Elevation** | −60 to +90° | Up/down from the array plane. |
 | **Distance** | 0.3 – 8 m | From the array centre. |
@@ -173,8 +173,15 @@ deletes one (the others are renumbered). Each speaker has a colour used everywhe
 - **Uploaded file:** choose any audio file the browser can decode (WAV, MP3, FLAC, OGG, M4A; up to 60 MB). It is mixed
   to mono, resampled to 16 kHz, peak-normalised and trimmed like the built-in voices. The file stays in the page only
   (it is not uploaded anywhere); after a reload, choose it again.
+- **Live recording:** press **● Record**, speak, press **■ Stop** (the button shows the elapsed time; recording stops by
+  itself at the recording length, at most 2 min). The microphone's own processing (echo cancellation, noise suppression,
+  automatic gain) is switched off so the voice is as the microphone heard it; the recording is then prepared like an
+  uploaded file. **Record again** replaces it. The browser asks for microphone permission the first time.
+  This works when the page is opened from your own computer (`python -m http.server` → `http://localhost:8000/...`,
+  or the file itself in Chrome/Edge). The claude.ai viewer blocks the microphone; the card then says so. Recordings
+  stay in the page only and are lost on reload (the zip keeps them in `dry/`).
 
-If speech runs past the end of the recording, the page warns that it is cut. If typed text or a file is not ready,
+If speech runs past the end of the recording, the page warns that it is cut. If typed text, a file or a recording is not ready,
 the built-in recording is used and the page says so.
 
 ---
@@ -346,7 +353,8 @@ web/
   vendor/scene_tts.js             eSpeak text-to-speech bundle (meSpeak 2.0.2, GNU GPL); rebuild: tools/build_tts.sh
   tools/export_scene.js           writes a scene's dry sources + geometry for the Python check
   tests/                          engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js,
-                                  ui_headless.py, ui_full.py (end-to-end, 103 checks), ui_speech.py (speech, 17 checks)
+                                  ui_headless.py, ui_full.py (end-to-end, 103 checks), ui_speech.py (speech, 17 checks),
+                                  ui_record.py (live recording, 13 checks)
 python/
   score_scene.py                  Python check of one scene
   make_python_scores.py           runs it on every scene's defaults
@@ -363,6 +371,7 @@ node tests/scenarios_test.js                      # 4 scenarios, all noise gener
 python tests/ui_headless.py robot_acoustic.html   # quick load check (pip install playwright)
 python tests/ui_full.py                           # every control end to end (~10 min; CHROMIUM=/path/to/chrome if needed)
 python tests/ui_speech.py                         # typed text, uploaded speech, voices, long speech (~2 min)
+python tests/ui_record.py                         # live recording with a fake microphone (~1 min)
 ```
 
 ---

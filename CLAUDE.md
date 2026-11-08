@@ -18,7 +18,7 @@ scenes/
 │   │   └── robot_acoustic.template.html  # UI template
 │   └── tests/                    # engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js, ui_headless.py,
 │                                 # ui_full.py (end-to-end: every scene/knob/button/track/download + Python column; CHROMIUM=... in cloud, ~10 min),
-│                                 # ui_speech.py (typed text / uploaded speech, ~2 min)
+│                                 # ui_speech.py (typed text / uploaded speech, ~2 min), ui_record.py (live recording, ~1 min)
 ├── voices/                       # male.wav, female.wav, baby.wav (base64'd into page)
 ├── python/                       # score_scene.py (Python cross-check), make_python_scores.py
 ├── python_out/<scene>/           # Python audio of the 4 scenarios (make_python_scores.py), played by the page

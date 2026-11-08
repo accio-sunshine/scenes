@@ -200,7 +200,7 @@ function normalizeParams(p0) {
     s.dist = engClamp(Number(s.dist) || 1.5, 0.3, 8); s.db = i === 0 ? 0 : (Number.isFinite(Number(s.db)) ? Number(s.db) : 0);
     s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     s.text = String(s.text == null ? "" : s.text).slice(0, 500); s.uploadId = String(s.uploadId || ""); s.uploadName = String(s.uploadName || "");
-    s.speech = ["text", "upload"].includes(s.speech) ? s.speech : "recording";
+    s.speech = ["text", "upload", "record"].includes(s.speech) ? s.speech : "recording";
     if (s.speech === "text" && (s.voice === "baby" || !s.text.trim())) s.speech = "recording";   // no text-to-speech for the baby
     return s;
   });
@@ -560,7 +560,8 @@ function engResample(x, f) {   // linear interpolation, reads x at f samples per
 }
 // What a speaker says: "recording" (the built-in voice files), "text" (speech synthesised by the page from s.text) or
 // "upload" (a file the user gave the page). The page puts the 16 kHz samples for text/upload in voices.extra[key].
-function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : s.speech === "upload" ? "upload|" + s.uploadId : ""; }
+// "record" (a live microphone recording made in the page) is stored and keyed like an upload.
+function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
 function engVoice(name, voices, cache) {
   if (name === "male_low") return cache.male_low || (cache.male_low = engResample(voices.male, 0.85));
   if (name === "female_high") return cache.female_high || (cache.female_high = engResample(voices.female, 1.15));
@@ -598,7 +599,7 @@ function render(p0, voices, progress = () => {}) {
     const label = "Speaker " + (i + 1) + " (" + s.voice.replace("_", " ") + ")";
     const pl = engPlace(cen, room, s.az, s.el, s.dist, p._legacy ? 0.1 : 0.2); note(label, pl);   // legacy v1 scenes may sit 0.15 m from a wall
     const key = engSpeechKey(s), own = key && voices.extra && voices.extra[key];
-    if (key && !own) warnings.push(label + ": the " + (s.speech === "text" ? "typed text" : "uploaded file") + " is not ready, so the built-in recording is used.");
+    if (key && !own) warnings.push(label + ": the " + (s.speech === "text" ? "typed text" : s.speech === "record" ? "live recording" : "uploaded file") + " is not ready, so the built-in recording is used.");
     const v = own || engVoice(s.voice, voices, vcache), st = Math.round(s.start * FS);
     if (s.voice !== "baby" && s.start + v.length / FS > DUR + 1e-9) warnings.push(label + "'s speech is " + (v.length / FS).toFixed(1) + " s long and runs past the end of the recording, so it is cut at " + DUR + " s.");
     let sig;
