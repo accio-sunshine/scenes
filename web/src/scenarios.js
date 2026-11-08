@@ -372,7 +372,7 @@ const NOISE_GEN = {
 };
 
 // ---------------------------------------------------------------- scenarios
-const SCENARIO_ORDER = ["home", "factory", "hospital", "automobile"];
+const SCENARIO_ORDER = ["home", "factory", "factory_booth", "hospital", "automobile"];
 
 const scRobotDefaults = { fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8, footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
 const scN = (id, label, gen, az, el, dist, db, on, path) => ({ id, label, gen, az, el, dist, db, on, path: path || null });
@@ -452,3 +452,24 @@ const SCENARIOS = {
     }, scRobotDefaults, { fanDb: -8, footstepsOn: false }),
   },
 };
+
+// The electronica 2026 booth layout (pdm_audio_eth, make_booth_scenes.sh): the factory hall with the stamping press
+// moved from 330 to 150 deg (at 330 the tracker pulled the talker at 0 deg onto it and whisper garbled her) and four
+// talkers on typed text spoken by Kokoro, prefilled with sentences that came out word for word right through the board.
+{
+  const F = SCENARIOS.factory.params, say = (s, text) => Object.assign(s, { speech: "text", engine: "kokoro", text });
+  SCENARIOS.factory_booth = {
+    label: "Factory (booth)",
+    desc: "The factory hall as at the electronica booth: four workers speak typed sentences (Kokoro voices), overlapping, from 0, 30, 210 and 270 degrees; the stamping press stands at 150 degrees.",
+    params: Object.assign({}, F, {
+      scenario: "factory_booth", duration: 10,
+      speakers: [
+        say(scS("s1", "male", 30, 0, 1.5, 0, 0.3, true), "Hi there, how are you doing today?"),
+        say(scS("s2", "female", 0, 0, 1.5, 0, 0.7, true), "The forklift is waiting at gate two."),
+        say(scS("s3", "male_low", 210, 0, 1.8, -1, 1.1, true), "Please bring the red toolbox to station four."),
+        say(scS("s4", "female_high", 270, 0, 2.5, -3, 1.5, true), "The conveyor belt stopped five minutes ago."),
+      ],
+      noises: F.noises.map(n => (n.id === "press" ? Object.assign({}, n, { az: 150 }) : Object.assign({}, n))),
+    }),
+  };
+}

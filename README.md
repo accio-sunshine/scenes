@@ -42,7 +42,7 @@ From top to bottom:
 | Section | What it is |
 |---|---|
 | Header | Name, subtitle and a two-sentence introduction. |
-| Scene row | Scene tabs (Home, Factory, Hospital, Automobile, Custom) and the selected scene's description. |
+| Scene row | Scene tabs (Home, Factory, Factory (booth), Hospital, Automobile, Custom) and the selected scene's description. |
 | Array view | Top view of the robot head with microphones, speakers and noise sources; legend; where the robot thinks sound comes from; play controls. |
 | Scene setup | All settings, in two columns: Room, Microphones, Speakers (left); Noise sources, Robot's own noise (right). |
 | Scores | Target-vs-everything-else scores per speaker and method, with the Python check. Download button. |
@@ -66,6 +66,7 @@ Anything you change afterwards is kept until you pick a scene again (re-selectin
 |---|---|---|---|---|---|---|
 | **Home** | 5 × 4 × 2.6 m | 0.45 s | 0.5 | −30 dB | male 20°/5° up, 1.5 m; female 150°, 1.6 m | TV (talk + music), fridge, kitchen clatter + water, vacuum cleaner (moves), door knocks, air-conditioner |
 | **Factory / Industry** | 20 × 15 × 7 m | 1.2 s | 0.1 | −18 dB | male 30°, 1.5 m; female 200°, 2.0 m | machine hum + drive whine, stamping press, compressed-air hiss, AGV reverse beeper (moves), two other robots (move), conveyor |
+| **Factory (booth)** | as Factory | 1.2 s | 0.1 | −18 dB | 10 s; four typed-text Kokoro talkers: male 30° 1.5 m 0.3 s, female 0° 1.5 m 0.7 s, male low 210° 1.8 m −1 dB 1.1 s, female high 270° 2.5 m −3 dB 1.5 s | as Factory, the stamping press at 150° (the electronica 2026 pdm_audio_eth booth layout) |
 | **Hospital** | 6 × 5 × 3 m | 0.8 s | 0.15 | −28 dB | female 15°, 1.2 m; male 160°, 1.6 m | patient monitor, IV-pump alarm, ventilator, HVAC, PA chime + announcement, trolley (moves), distant chatter |
 | **Automobile** | 2.7 × 1.6 × 1.2 m cabin | 0.12 s | 0.7 | −22 dB | driver 210°/11° up, 0.82 m; passenger 150°/11° up, 0.82 m (array on the dashboard) | engine (rpm ramp), road/tyre, wind, HVAC blower, indicator relay, road bumps, radio |
 | **Custom (classic tests)** | 6 × 5 × 3 m | 0.5 s | 0 | −25 dB | man 40°, woman 150°, 1.5 m; baby 250°, 2.5 m, 0.7 m below the array | none (robot noise only) |
@@ -167,9 +168,17 @@ deletes one (the others are renumbered). Each speaker has a colour used everywhe
 **Speech options**
 
 - **Recording:** the built-in voice file for the selected voice.
-- **Typed text:** type up to 500 characters; the page synthesises them with eSpeak (meSpeak, loaded on first use from
-  `web/vendor/scene_tts.js`). Voice variants: male = m3 (pitch 40), male low = m1 (25), female = f2 (55),
-  female high = f4 (75). Not available for the baby. Synthesis happens once per voice and text and is cached.
+- **Typed text:** type up to 500 characters; **Voice engine** chooses who speaks them:
+  - **Kokoro** (default): Kokoro 82M (kokoro-js, Apache-2.0; phonemes by eSpeak NG, GNU GPL), loaded on first use
+    from `web/vendor/scene_kokoro.js` with onnxruntime-web from `web/vendor/ort/`. The model
+    (`onnx-community/Kokoro-82M-v1.0-ONNX`, q8, about 90 MB) comes from Hugging Face the first time and is then cached
+    by the browser, so go online once. Voices: male = am_michael, male low = bm_george, female = af_heart,
+    female high = bf_emma. About 5 s per sentence on the CPU.
+  - **eSpeak** (offline): meSpeak, loaded on first use from `web/vendor/scene_tts.js`. Voice variants: male = m3
+    (pitch 40), male low = m1 (25), female = f2 (55), female high = f4 (75).
+
+  Not available for the baby. Synthesis happens once per engine, voice and text and is cached. `settings.json` records
+  the engine and the text of each speaker.
 - **Uploaded file:** choose any audio file the browser can decode (WAV, MP3, FLAC, OGG, M4A; up to 60 MB). It is mixed
   to mono, resampled to 16 kHz, peak-normalised and trimmed like the built-in voices. The file stays in the page only
   (it is not uploaded anywhere); after a reload, choose it again.
@@ -351,6 +360,7 @@ web/
   src/robot_acoustic.template.html  UI
   src/python_scores.json          Python check of each scene's defaults (make_python_scores.py)
   vendor/scene_tts.js             eSpeak text-to-speech bundle (meSpeak 2.0.2, GNU GPL); rebuild: tools/build_tts.sh
+  vendor/scene_kokoro.js, ort/    Kokoro text-to-speech bundle (kokoro-js 1.2.1, Apache-2.0) + onnxruntime-web wasm (MIT); rebuild: tools/build_kokoro.sh
   tools/export_scene.js           writes a scene's dry sources + geometry for the Python check
   tests/                          engine_regression.js (+ fixtures/engine_v1.js), scenarios_test.js,
                                   ui_headless.py, ui_full.py (end-to-end, 103 checks), ui_speech.py (speech, 17 checks),
