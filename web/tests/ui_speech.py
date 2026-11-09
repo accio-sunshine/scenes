@@ -28,6 +28,8 @@ with sync_playwright() as p:
     # typed text
     pg.select_option("#k_s1_speech", "text")
     ok(pg.is_visible("#k_s1_text") and not pg.is_visible("#spk_s1 label.upbtn"), "Typed text shows the text box")
+    ok(pg.is_visible("#k_s1_engine") and pg.input_value("#k_s1_engine") == "kokoro", "Typed text shows the engine choice, Kokoro by default")
+    pg.select_option("#k_s1_engine", "espeak")
     pg.fill("#k_s1_text", "Robot, please bring me the red toolbox from the kitchen table."); settled()
     t1 = pg.evaluate("__ui.RES.talk.s1")
     ok(abs((t1[1]-t1[0]) - (t0[1]-t0[0])) > 0.3, f"speech length changed: recording {t0[1]-t0[0]:.2f} s -> typed {t1[1]-t1[0]:.2f} s")
@@ -62,6 +64,21 @@ with sync_playwright() as p:
     with pg.expect_download() as dl: pg.click("#dlAll")
     import zipfile; z = zipfile.ZipFile(dl.value.path()); st = json.loads(z.read("settings.json"))
     ok(st["speakers"][0]["speech"] == "text" and st["speakers"][0]["text"].startswith("This is a deliberately") and "dry/s1.wav" in z.namelist(), "zip: settings.json has the text; dry/s1.wav has the speech")
+    # Kokoro (model from Hugging Face on first use: needs the network once)
+    pg.select_option("#k_duration", "10"); pg.select_option("#k_s1_voice", "male")
+    pg.select_option("#k_s1_engine", "kokoro"); pg.fill("#k_s1_text", "Hi there, how are you doing today?"); settled()
+    t3 = pg.evaluate("__ui.RES.talk.s1"); dry = np.array(pg.evaluate("Array.from(__ui.RES.dry.s1)")); seg = dry[int(round(t3[0]*16000)):int(round(t3[1]*16000))]
+    ok(not pg.evaluate("__ui.RES.warnings.length") and 1.0 < t3[1]-t3[0] < 4.0 and np.max(np.abs(seg)) > 0.9, f"Kokoro speech is in the scene ({t3[1]-t3[0]:.2f} s, warnings {pg.evaluate('__ui.RES.warnings')})")
+    sf.write(os.path.join(OUT, "kokoro_s1_dry.wav"), seg.astype(np.float32), 16000)
+    with pg.expect_download() as dl: pg.click("#dlAll")
+    st = json.loads(zipfile.ZipFile(dl.value.path()).read("settings.json"))
+    ok(st["speakers"][0]["engine"] == "kokoro" and st["speakers"][0]["text"] == "Hi there, how are you doing today?", "zip: settings.json has engine kokoro and the text")
+    # the booth layout as a scene: press at 150 deg, four typed-text Kokoro talkers
+    pg.click("#card_factory_booth"); settled()
+    sp = pg.evaluate("__ui.P.speakers"); press = [n for n in pg.evaluate("__ui.P.noises") if n["id"] == "press"]
+    ok(len(sp) == 4 and all(s["speech"] == "text" and s["engine"] == "kokoro" and s["text"] for s in sp) and [s["az"] for s in sp] == [30, 0, 210, 270],
+       f"Factory (booth): 4 Kokoro talkers at 30/0/210/270 ({[(s['voice'], s['az'], s['speech']) for s in sp]})")
+    ok(press and press[0]["az"] == 150 and not pg.evaluate("__ui.RES.warnings.length"), "Factory (booth): press at 150 deg, renders without warnings")
     ok(not errs, "no page errors" + (f": {errs[:3]}" if errs else ""))
     b.close()
 print(f"\n{'ALL PASSED' if not fails else f'{len(fails)} FAILED'}")

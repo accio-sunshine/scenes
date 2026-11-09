@@ -30,7 +30,8 @@ scenes/
 | Feature | Detail |
 |---|---|
 | **Title** | "Scene Simulator" |
-| **Scenarios** | Home, Factory, Hospital, Automobile + Custom (classic tests) |
+| **Scenarios** | Home, Factory, Factory (booth), Hospital, Automobile + Custom (classic tests) |
+| **Typed text** | Kokoro 82M (default; model from Hugging Face on first use) or eSpeak (offline) per speaker |
 | **Room** | Length, Width, Height, Echo (RT60), Damping (0 = legacy), noise floor |
 | **Speakers** | Up to 5, each with voice, azimuth 0-359°, elevation -60..+90°, distance, loudness, start time, target on/off |
 | **Noise sources** | Per-scenario list, on/off, level, position; moving sources tagged |

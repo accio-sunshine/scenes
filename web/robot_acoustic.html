@@ -374,7 +374,7 @@ button[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
     </section>
   </div>
 
-  <p class="foot">Room: image sources to 3 bounces plus a statistical late tail. All ambient noise is synthesised. Levels are at mic 1 relative to Speaker 1. Python column: pyroomacoustics check of each scene's defaults (python/score_scene.py). Typed speech: eSpeak via meSpeak (GNU GPL).</p>
+  <p class="foot">Room: image sources to 3 bounces plus a statistical late tail. All ambient noise is synthesised. Levels are at mic 1 relative to Speaker 1. Python column: pyroomacoustics check of each scene's defaults (python/score_scene.py). Typed speech: Kokoro 82M via kokoro-js (Apache-2.0; phonemes by eSpeak NG, GNU GPL; model from Hugging Face on first use) or eSpeak via meSpeak (GNU GPL).</p>
 </main>
 
 <script id="engine">
@@ -527,7 +527,7 @@ function normalizeParams(p0) {
     p[k] = v;
   };
   p.schema = 2;
-  p.scenario = ["home", "factory", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
+  p.scenario = ["home", "factory", "factory_booth", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
   num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
@@ -581,6 +581,7 @@ function normalizeParams(p0) {
     s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     s.text = String(s.text == null ? "" : s.text).slice(0, 500); s.uploadId = String(s.uploadId || ""); s.uploadName = String(s.uploadName || "");
     s.speech = ["text", "upload", "record"].includes(s.speech) ? s.speech : "recording";
+    s.engine = s.engine === "espeak" ? "espeak" : "kokoro";   // typed text: Kokoro voices, or eSpeak (offline)
     if (s.speech === "text" && (s.voice === "baby" || !s.text.trim())) s.speech = "recording";   // no text-to-speech for the baby
     return s;
   });
@@ -941,7 +942,7 @@ function engResample(x, f) {   // linear interpolation, reads x at f samples per
 // What a speaker says: "recording" (the built-in voice files), "text" (speech synthesised by the page from s.text) or
 // "upload" (a file the user gave the page). The page puts the 16 kHz samples for text/upload in voices.extra[key].
 // "record" (a live microphone recording made in the page) is stored and keyed like an upload.
-function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
+function engSpeechKey(s) { return s.speech === "text" ? (s.engine === "espeak" ? "tts|" : "kokoro|") + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
 function engVoice(name, voices, cache) {
   if (name === "male_low") return cache.male_low || (cache.male_low = engResample(voices.male, 0.85));
   if (name === "female_high") return cache.female_high || (cache.female_high = engResample(voices.female, 1.15));
@@ -1559,7 +1560,7 @@ const NOISE_GEN = {
 };
 
 // ---------------------------------------------------------------- scenarios
-const SCENARIO_ORDER = ["home", "factory", "hospital", "automobile"];
+const SCENARIO_ORDER = ["home", "factory", "factory_booth", "hospital", "automobile"];
 
 const scRobotDefaults = { fanOn: true, fanDb: -6, fanRpm: 4200, neckOn: true, neckDb: -4, shouldersOn: true, shouldersDb: -8, footstepsOn: false, footstepsDb: -2, clicksOn: true, clicksDb: -10, humOn: true, humDb: -25 };
 const scN = (id, label, gen, az, el, dist, db, on, path) => ({ id, label, gen, az, el, dist, db, on, path: path || null });
@@ -1640,6 +1641,27 @@ const SCENARIOS = {
   },
 };
 
+// The electronica 2026 booth layout (pdm_audio_eth, make_booth_scenes.sh): the factory hall with the stamping press
+// moved from 330 to 150 deg (at 330 the tracker pulled the talker at 0 deg onto it and whisper garbled her) and four
+// talkers on typed text spoken by Kokoro, prefilled with sentences that came out word for word right through the board.
+{
+  const F = SCENARIOS.factory.params, say = (s, text) => Object.assign(s, { speech: "text", engine: "kokoro", text });
+  SCENARIOS.factory_booth = {
+    label: "Factory (booth)",
+    desc: "The factory hall as at the electronica booth: four workers speak typed sentences (Kokoro voices), overlapping, from 0, 30, 210 and 270 degrees; the stamping press stands at 150 degrees.",
+    params: Object.assign({}, F, {
+      scenario: "factory_booth", duration: 10,
+      speakers: [
+        say(scS("s1", "male", 30, 0, 1.5, 0, 0.3, true), "Hi there, how are you doing today?"),
+        say(scS("s2", "female", 0, 0, 1.5, 0, 0.7, true), "The forklift is waiting at gate two."),
+        say(scS("s3", "male_low", 210, 0, 1.8, -1, 1.1, true), "Please bring the red toolbox to station four."),
+        say(scS("s4", "female_high", 270, 0, 2.5, -3, 1.5, true), "The conveyor belt stopped five minutes ago."),
+      ],
+      noises: F.noises.map(n => (n.id === "press" ? Object.assign({}, n, { az: 150 }) : Object.assign({}, n))),
+    }),
+  };
+}
+
 </script>
 <script>
 // The page script lives in a function so none of its names can clash with the engine's or the scenarios' globals
@@ -1682,7 +1704,7 @@ const PRESETS = [
   { id: "robot", label: "Robot moving", set: {}, desc: "Fan, hum, head turns, an arm gesture and brake clicks. Footsteps are parked (switched off)." },
   { id: "quiet", label: "Quiet room", set: { ...ROBOT_OFF, babyOn: false }, desc: "Just the two people and a faint room noise floor." },
 ];
-const SCENE_LABELS = { home: "Home", factory: "Factory", hospital: "Hospital", automobile: "Automobile", custom: "Custom" };
+const SCENE_LABELS = { home: "Home", factory: "Factory", factory_booth: "Factory (booth)", hospital: "Hospital", automobile: "Automobile", custom: "Custom" };
 const CUSTOM_DESC = "The four original test scenes (baby, baby + fan, robot moving, quiet room) in the 6 × 5 × 3 m room, with the Python comparison.";
 let P = clone(BASE), sceneId = "custom", presetId = "robot", arrayAuto = true, RP = null;
 const deg = v => `${Math.round(v)}°`, mtr = v => `${(+v).toFixed(2)} m`, dB = v => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)} dB`;
@@ -1703,7 +1725,7 @@ function centreArray(q) {
 }
 function fixP(q) {
   if (!Array.isArray(q.speakers) || !q.speakers.length) q.speakers = [{ voice: "male", az: 40, dist: 1.5, start: 0.3 }, { voice: "female", az: 150, dist: 1.5, start: 2.6 }];
-  q.speakers = q.speakers.slice(0, MAX_SPK).map((s, i) => ({ voice: "male", az: 0, el: 0, dist: 1.5, db: 0, start: 0, target: true, speech: "recording", text: "", uploadId: "", uploadName: "", ...s, id: "s" + (i + 1) }));
+  q.speakers = q.speakers.slice(0, MAX_SPK).map((s, i) => ({ voice: "male", az: 0, el: 0, dist: 1.5, db: 0, start: 0, target: true, speech: "recording", engine: "kokoro", text: "", uploadId: "", uploadName: "", ...s, id: "s" + (i + 1) }));
   q.speakers[0].db = 0;
   q.noises = (Array.isArray(q.noises) ? q.noises : []).map((n, i) => ({ label: n.gen || "noise", az: 0, el: 0, dist: 2, db: -20, on: true, path: null, ...n, id: n.id || "n" + (i + 1) }));
   if (q.arrayX == null || q.arrayY == null || q.arrayH == null) { const t = { ...q }; centreArray(t); if (q.arrayX == null) q.arrayX = t.arrayX; if (q.arrayY == null) q.arrayY = t.arrayY; if (q.arrayH == null) q.arrayH = t.arrayH; }
@@ -1868,6 +1890,8 @@ function buildSpeakers() {
         const o = q(), fromMic = o.uploadName.startsWith("Live");
         if ((v === "record" && !fromMic) || (v === "upload" && fromMic)) { o.uploadId = ""; o.uploadName = ""; }
         o.speech = v; } });
+    const eng = mkSelect(sp, regs.spk, { id: `k_${sid}_engine`, label: "Voice engine", options: [["kokoro", "Kokoro"], ["espeak", "eSpeak"]],
+      get: () => q().engine || "kokoro", set: v => { q().engine = v; } });
     const tx = document.createElement("input"); tx.type = "text"; tx.id = `k_${sid}_text`; tx.maxLength = 500; tx.className = "spk-text";
     tx.setAttribute("aria-label", `What speaker ${i + 1} says`);
     tx.addEventListener("input", () => { q().text = tx.value; changed(); });
@@ -1882,7 +1906,7 @@ function buildSpeakers() {
     regs.spk.push(() => {
       const o = q(), baby = o.voice === "baby";
       sp.querySelector(`option[value="text"]`).disabled = baby;
-      tx.hidden = o.speech !== "text"; up.hidden = o.speech !== "upload"; rec.hidden = o.speech !== "record";
+      tx.hidden = eng.hidden = o.speech !== "text"; up.hidden = o.speech !== "upload"; rec.hidden = o.speech !== "record";
       fname.hidden = o.speech !== "upload" && o.speech !== "record";
       const live = recState && recState.sid === sid;
       rec.textContent = live ? `■ Stop (${recState.secs.toFixed(1)} s)` : (o.uploadId && o.speech === "record" && o.uploadName.startsWith("Live") ? "● Record again" : "● Record");
@@ -2223,7 +2247,21 @@ async function toggleRecord(sid) {
   recState.timer = setInterval(() => { if (!recState) return; recState.secs += 0.2; if (recState.secs >= maxS) recState.rec.stop(); syncKnobs(); }, 200);
   syncKnobs();
 }
-const speechKey = s => (s.speech === "text" && s.voice !== "baby" && s.text.trim() ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") && s.uploadId ? "upload|" + s.uploadId : "");
+const speechKey = s => (s.speech === "text" && s.voice !== "baby" && s.text.trim() ? (s.engine === "espeak" ? "tts|" : "kokoro|") + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") && s.uploadId ? "upload|" + s.uploadId : "");
+// Kokoro voices for the four speech slots (checked through the pdm_audio_eth board: whisper gets them word for word)
+const KOKORO_VOICE = { male: "am_michael", male_low: "bm_george", female: "af_heart", female_high: "bf_emma" };
+let kokoroLib = null;
+function loadKokoro() {
+  if (!kokoroLib) kokoroLib = new Promise((res, rej) => {
+    const go = () => window.SceneKokoro.load(p => { if (p && p.status === "progress" && p.total) setStatus(true, `Loading the Kokoro voice model (${Math.round(100 * p.loaded / p.total)} %)…`); }).then(() => res(window.SceneKokoro), rej);
+    if (window.SceneKokoro) return go();
+    const sc = document.createElement("script"); sc.src = "vendor/scene_kokoro.js";
+    sc.onload = () => (window.SceneKokoro ? go() : rej(new Error("Kokoro did not start")));
+    sc.onerror = () => rej(new Error("vendor/scene_kokoro.js is not available here; open the page from the repo"));
+    document.head.appendChild(sc);
+  }).catch(e => { kokoroLib = null; throw new Error("Kokoro could not load (" + (e.message || e) + "); the model comes from Hugging Face on first use, so go online once, or choose eSpeak"); });
+  return kokoroLib;
+}
 async function prepareSpeech(params) {   // -> {key: Float32Array} that the worker does not have yet
   const extra = {};
   for (const s of params.speakers) {
@@ -2231,9 +2269,16 @@ async function prepareSpeech(params) {   // -> {key: Float32Array} that the work
     if (s.speech === "upload" || s.speech === "record") { if (uploads[s.uploadId]) extra[key] = uploads[s.uploadId]; continue; }
     if (!ttsCache[key]) {
       setStatus(true, `Synthesising speech for ${spkName(s)}…`);
-      const lib = await loadTTS(), wav = lib.speak(" " + s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);   // leading space: text starting with "-" must not read as an eSpeak option
-      if (!wav) throw new Error("the speech engine returned nothing for that text");
-      ttsCache[key] = await toVoice16k(wav.buffer);
+      if (s.engine === "espeak") {
+        const lib = await loadTTS(), wav = lib.speak(" " + s.text, TTS_VOICE[s.voice] || TTS_VOICE.male);   // leading space: text starting with "-" must not read as an eSpeak option
+        if (!wav) throw new Error("the speech engine returned nothing for that text");
+        ttsCache[key] = await toVoice16k(wav.buffer);
+      } else {
+        const k = await loadKokoro();
+        setStatus(true, `Speaking ${spkName(s)}'s text with Kokoro…`);
+        const a = await k.speak(s.text, KOKORO_VOICE[s.voice] || KOKORO_VOICE.male);
+        ttsCache[key] = await toVoice16k(wavBytesF32(a.audio, a.sampling_rate).buffer);
+      }
     }
     extra[key] = ttsCache[key];
   }
@@ -2788,6 +2833,6 @@ drawHead(); drawLegend(); buildPyList(); syncPyList();
 let resizeT = null;
 window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (view) drawWave(view.arr); }, 150); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (view) { drawWave(view.arr); drawSpec(view.arr); } });
-window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; } };
+window.__ui = { get P() { return P; }, get RES() { return RES; }, get RP() { return RP; }, loadScene, addSpeaker, get view() { return view; }, KOKORO_VOICE };   // KOKORO_VOICE: test hook (voice checks swap a slot's voice before a render)
 })();
 </script>

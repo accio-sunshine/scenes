@@ -147,7 +147,7 @@ function normalizeParams(p0) {
     p[k] = v;
   };
   p.schema = 2;
-  p.scenario = ["home", "factory", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
+  p.scenario = ["home", "factory", "factory_booth", "hospital", "automobile", "custom"].includes(p.scenario) ? p.scenario : "custom";
   num("roomL", 6, 1, 30); num("roomW", 5, 1, 30); num("roomH", 3, 1, 8);   // same limits as the page sliders (the car cabin is 1.6 x 1.2 m)
   num("rt60", 0.5, 0.05, 1.5); num("damping", 0, 0, 1); num("roomDb", 25); num("radius", 5, 1, 20);
   num("fanRpm", 4200, 600, 20000);
@@ -201,6 +201,7 @@ function normalizeParams(p0) {
     s.start = engClamp(Number(s.start) || 0, 0, Math.max(4.5, p.duration - 1)); s.target = s.target !== false;
     s.text = String(s.text == null ? "" : s.text).slice(0, 500); s.uploadId = String(s.uploadId || ""); s.uploadName = String(s.uploadName || "");
     s.speech = ["text", "upload", "record"].includes(s.speech) ? s.speech : "recording";
+    s.engine = s.engine === "espeak" ? "espeak" : "kokoro";   // typed text: Kokoro voices, or eSpeak (offline)
     if (s.speech === "text" && (s.voice === "baby" || !s.text.trim())) s.speech = "recording";   // no text-to-speech for the baby
     return s;
   });
@@ -561,7 +562,7 @@ function engResample(x, f) {   // linear interpolation, reads x at f samples per
 // What a speaker says: "recording" (the built-in voice files), "text" (speech synthesised by the page from s.text) or
 // "upload" (a file the user gave the page). The page puts the 16 kHz samples for text/upload in voices.extra[key].
 // "record" (a live microphone recording made in the page) is stored and keyed like an upload.
-function engSpeechKey(s) { return s.speech === "text" ? "tts|" + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
+function engSpeechKey(s) { return s.speech === "text" ? (s.engine === "espeak" ? "tts|" : "kokoro|") + s.voice + "|" + s.text : (s.speech === "upload" || s.speech === "record") ? "upload|" + s.uploadId : ""; }
 function engVoice(name, voices, cache) {
   if (name === "male_low") return cache.male_low || (cache.male_low = engResample(voices.male, 0.85));
   if (name === "female_high") return cache.female_high || (cache.female_high = engResample(voices.female, 1.15));

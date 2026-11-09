@@ -36,7 +36,14 @@ function writeWav(file, x) {
 }
 const outDir = path.join(__dirname, "out"); fs.mkdirSync(outDir, { recursive: true });
 
-check(JSON.stringify(SCENARIO_ORDER) === JSON.stringify(["home", "factory", "hospital", "automobile"]), "SCENARIO_ORDER");
+check(JSON.stringify(SCENARIO_ORDER) === JSON.stringify(["home", "factory", "factory_booth", "hospital", "automobile"]), "SCENARIO_ORDER");
+{
+  const B = SCENARIOS.factory_booth.params, F = SCENARIOS.factory.params;
+  check(B.noises.find(n => n.id === "press").az === 150 && B.noises.length === F.noises.length, "factory_booth: factory noises, press at 150");
+  check(B.speakers.map(s => [s.voice, s.az, s.dist, s.db, s.start].join()).join(";") ===
+        "male,30,1.5,0,0.3;female,0,1.5,0,0.7;male_low,210,1.8,-1,1.1;female_high,270,2.5,-3,1.5", "factory_booth: the booth talkers");
+  check(B.speakers.every(s => s.speech === "text" && s.engine === "kokoro" && s.text.trim()), "factory_booth: typed text, Kokoro, prefilled");
+}
 const inRange = (v, lo, hi) => typeof v === "number" && isFinite(v) && v >= lo && v <= hi;
 const R = 0.2;   // engine clamp margin: aim for sources that need no clamping
 
